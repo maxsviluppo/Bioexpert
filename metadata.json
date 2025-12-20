@@ -1,0 +1,7 @@
+{
+  "description": "BioExpert - Analisi botanica e assistenza agricola intelligente.",
+  "requestFramePermissions": [
+    "camera"
+  ],
+  "name": "BioExpert"
+}
