@@ -1,8 +1,8 @@
 
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { createRoot } from 'react-dom/client';
 import { GoogleGenAI, Type } from '@google/genai';
-import { Camera, Send, Sprout, Activity, Info, X, RefreshCw, MessageSquare, Droplets, Sun, AlertTriangle, CheckCircle2, Scan, ChevronRight, Settings, Moon, Bell, Bug, Mountain, Users, ZoomIn, ZoomOut, Bot, Sparkles, History, Share2, Download, Trash2, Calendar, Mail, Zap, ChevronLeft, Key, ExternalLink, Plus, Trophy, Target, Gamepad2, Star, Upload, HelpCircle, Volume2, User, Globe, ShieldAlert, LogOut, Heart, Clock, Leaf, Apple, Scissors, Wind, Layers, Settings2, Sliders } from 'lucide-react';
+import { Camera, Send, Sprout, Activity, Info, X, RefreshCw, MessageSquare, Droplets, Sun, AlertTriangle, CheckCircle2, Scan, ChevronRight, Settings, Moon, Bell, Bug, Mountain, Users, ZoomIn, ZoomOut, Bot, Sparkles, History, Share2, Download, Trash2, Calendar, Mail, Zap, ChevronLeft, Key, ExternalLink, Plus, Trophy, Target, Gamepad2, Star, Upload, HelpCircle, Volume2, User, Globe, ShieldAlert, LogOut, Heart, Clock, Leaf, Apple, Scissors, Wind, Layers, Settings2, Sliders, PlayCircle, CheckCircle } from 'lucide-react';
 
 // --- STYLES ---
 const styles = `
@@ -119,17 +119,16 @@ const styles = `
     border-radius: 100px;
     font-size: 0.75rem;
     font-weight: 800;
-    letter-spacing: 0.05em;
   }
 
   .main-frame {
     position: relative;
-    width: calc(100% - 32px);
+    width: calc(100% - 24px);
     flex: 1;
-    max-height: 70vh;
+    max-height: 72vh;
     background: var(--white);
     border-radius: 40px;
-    padding: 10px;
+    padding: 8px;
     box-shadow: 0 12px 32px rgba(0,0,0,0.06);
     border: 1px solid var(--card-border);
     margin: 0 auto 12px;
@@ -142,7 +141,7 @@ const styles = `
     width: 100%;
     height: 100%;
     flex: 1;
-    border-radius: 30px;
+    border-radius: 32px;
     overflow: hidden;
     background: #f0f2ed;
     position: relative;
@@ -161,10 +160,11 @@ const styles = `
     flex-direction: column;
     gap: 16px;
     scroll-behavior: smooth;
+    padding-bottom: 60px;
   }
 
   .msg {
-    max-width: 88%;
+    max-width: 90%;
     padding: 14px 18px;
     border-radius: 20px;
     font-size: 0.95rem;
@@ -176,6 +176,22 @@ const styles = `
 
   .msg-user { align-self: flex-end; background: var(--primary); color: white; border-bottom-right-radius: 4px; }
   .msg-bot { align-self: flex-start; background: var(--white); color: var(--dark); border-bottom-left-radius: 4px; border: 1px solid var(--card-border); }
+
+  .structured-bot-msg {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  
+  .bot-line-title {
+    font-weight: 800;
+    color: var(--primary-dark);
+    margin-top: 8px;
+    display: block;
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
 
   .suggestions-scroll {
     display: flex;
@@ -245,12 +261,27 @@ const styles = `
     font-weight: 700;
     font-size: 0.75rem;
     box-shadow: var(--shadow-3d);
-    transition: transform 0.2s;
+    transition: transform 0.2s, background 0.3s;
   }
   .btn-3d:active { transform: scale(0.95); }
 
   .btn-3d.scatta { background: linear-gradient(145deg, var(--primary), var(--primary-dark)); color: white; }
   .btn-3d.secondary { background: var(--white); color: var(--dark); border: 1px solid var(--card-border); }
+
+  .jiggle-animated {
+    animation: jiggle 0.6s cubic-bezier(.36,.07,.19,.97) both infinite;
+    transform: translate3d(0, 0, 0);
+  }
+  
+  .jiggle-animated:nth-child(2) { animation-delay: 0.1s; }
+  .jiggle-animated:nth-child(3) { animation-delay: 0.2s; }
+
+  @keyframes jiggle {
+    10%, 90% { transform: translate3d(-1.5px, 0, 0) rotate(-1.5deg); }
+    20%, 80% { transform: translate3d(2.5px, 0, 0) rotate(1.5deg); }
+    30%, 50%, 70% { transform: translate3d(-3.5px, 0, 0) rotate(-2.5deg); }
+    40%, 60% { transform: translate3d(3.5px, 0, 0) rotate(2.5deg); }
+  }
 
   .btn-analyze-toast {
     position: absolute;
@@ -285,6 +316,7 @@ const styles = `
     overflow: hidden;
     width: 100%;
     animation: fadeIn 0.4s ease-out;
+    flex-shrink: 0;
   }
 
   .analysis-msg-header {
@@ -323,14 +355,6 @@ const styles = `
     font-weight: 900;
     color: var(--primary-dark);
     line-height: 1.1;
-  }
-
-  .analysis-title-group .sci {
-    font-size: 0.85rem;
-    font-style: italic;
-    opacity: 0.6;
-    margin-top: 4px;
-    display: block;
   }
 
   .analysis-thumbnail-small {
@@ -389,24 +413,6 @@ const styles = `
     opacity: 0.95;
   }
 
-  .chat-deepen-prompt {
-    margin-top: 20px;
-    padding: 14px;
-    background: var(--primary-light);
-    border-radius: 16px;
-    font-size: 0.9rem;
-    text-align: center;
-    font-weight: 700;
-    color: var(--primary-dark);
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 8px;
-    border: 1px solid transparent;
-  }
-  .chat-deepen-prompt:active { background: var(--white); border-color: var(--primary); }
-
   .side-overlay {
     position: fixed;
     inset: 0;
@@ -425,15 +431,6 @@ const styles = `
     padding: 16px;
   }
 
-  .settings-section-title {
-    padding: 0 12px 8px;
-    font-size: 0.75rem;
-    font-weight: 800;
-    color: var(--primary);
-    text-transform: uppercase;
-    letter-spacing: 0.1em;
-  }
-
   .settings-card {
     background: var(--white);
     border-radius: 24px;
@@ -449,25 +446,7 @@ const styles = `
     padding: 16px 20px;
     border-bottom: 1px solid var(--card-border);
     cursor: pointer;
-    transition: background 0.2s;
   }
-  .settings-row:last-child { border-bottom: none; }
-  .settings-row:active { background: var(--primary-light); }
-
-  .settings-icon-box {
-    width: 40px;
-    height: 40px;
-    border-radius: 12px;
-    background: var(--primary-light);
-    color: var(--primary);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  }
-
-  .settings-text { flex: 1; }
-  .settings-label { font-weight: 700; font-size: 0.95rem; }
-  .settings-sub { font-size: 0.75rem; opacity: 0.6; margin-top: 2px; }
 
   .toggle-switch {
     width: 44px;
@@ -488,7 +467,6 @@ const styles = `
     top: 2px;
     left: 2px;
     transition: transform 0.3s;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
   }
   .toggle-switch.active::after { transform: translateX(20px); }
 
@@ -515,20 +493,13 @@ const styles = `
     pointer-events: auto;
   }
 
-  .shutter-inner {
-    width: 100%;
-    height: 100%;
-    background: white;
-    border-radius: 50%;
-  }
-
   .sway-animated {
-    animation: plantSway 5s ease-in-out infinite;
-    transform-origin: 50% 85%;
+    animation: plantSway 6s cubic-bezier(0.445, 0.05, 0.55, 0.95) infinite;
+    transform-origin: 50% 90%;
   }
   @keyframes plantSway {
-    0%, 100% { transform: rotate(-4deg); }
-    50% { transform: rotate(4deg); }
+    0%, 100% { transform: rotate(-3deg) scale(1); }
+    50% { transform: rotate(3deg) scale(1.02); }
   }
 
   .placeholder-text {
@@ -567,7 +538,24 @@ const styles = `
     align-items: center;
     gap: 16px;
     margin-bottom: 12px;
+    transition: all 0.2s;
   }
+
+  .game-btn {
+    background: var(--primary);
+    color: white;
+    padding: 8px 16px;
+    border-radius: 12px;
+    border: none;
+    font-weight: 800;
+    font-size: 0.75rem;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .game-btn:disabled { background: #E0E0E0; color: #999; cursor: not-allowed; }
+  .game-btn.claim { background: #FFD700; color: #5F4B00; }
 
   .xp-bar-container-small {
     width: 60px;
@@ -582,6 +570,8 @@ const styles = `
     background: var(--primary);
     transition: width 0.3s ease;
   }
+
+  @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
 `;
 
 // --- TYPES ---
@@ -607,17 +597,19 @@ interface UserStats {
   xp: number;
   level: number;
   totalScans: number;
+  completedQuests: string[];
+  activeQuests: string[];
 }
 
 const QUESTS = [
-  { id: 'mushroom', title: 'Cacciatore di Funghi', icon: <Mountain size={20}/>, xp: 50 },
-  { id: 'succulent', title: 'Esperto di Grasse', icon: <Sprout size={20}/>, xp: 30 },
-  { id: 'flower_red', title: 'Cuore Rosso', icon: <Target size={20}/>, xp: 40 },
-  { id: 'aromatic', title: 'Mastro Aromi', icon: <Leaf size={20}/>, xp: 35 },
-  { id: 'indoor', title: 'Giardiniere d\'Interni', icon: <Layers size={20}/>, xp: 45 },
-  { id: 'exotic', title: 'Scopritore Esotico', icon: <Apple size={20}/>, xp: 60 },
-  { id: 'rose', title: 'Il Poeta delle Rose', icon: <Heart size={20}/>, xp: 40 },
-  { id: 'tree', title: 'Amico degli Alberi', icon: <Wind size={20}/>, xp: 50 }
+  { id: 'mushroom', title: 'Cacciatore di Funghi', icon: <Mountain size={20}/>, xp: 50, requirement: 'Fungo' },
+  { id: 'succulent', title: 'Esperto di Grasse', icon: <Sprout size={20}/>, xp: 30, requirement: 'Succulenta' },
+  { id: 'flower_red', title: 'Cuore Rosso', icon: <Target size={20}/>, xp: 40, requirement: 'Fiore' },
+  { id: 'aromatic', title: 'Mastro Aromi', icon: <Leaf size={20}/>, xp: 35, requirement: 'Aromatica' },
+  { id: 'indoor', title: 'Giardiniere d\'Interni', icon: <Layers size={20}/>, xp: 45, requirement: 'Interno' },
+  { id: 'exotic', title: 'Scopritore Esotico', icon: <Apple size={20}/>, xp: 60, requirement: 'Esotica' },
+  { id: 'rose', title: 'Il Poeta delle Rose', icon: <Heart size={20}/>, xp: 40, requirement: 'Rosa' },
+  { id: 'tree', title: 'Amico degli Alberi', icon: <Wind size={20}/>, xp: 50, requirement: 'Albero' }
 ];
 
 const CHAT_PROMPTS = [
@@ -636,27 +628,42 @@ function App() {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [capturedImg, setCapturedImg] = useState<string | null>(null);
   const [isChatLoading, setIsChatLoading] = useState(false);
-  const [messages, setMessages] = useState<{role: 'user' | 'bot' | 'analysis', text?: string, data?: PlantAnalysis}[]>([]);
-  const [chatInput, setChatInput] = useState('');
-  const [history, setHistory] = useState<PlantAnalysis[]>(() => JSON.parse(localStorage.getItem('bio_history') || '[]'));
-  const [stats, setStats] = useState<UserStats>(() => JSON.parse(localStorage.getItem('bio_stats') || '{"xp":0,"level":1,"totalScans":0}'));
+  const [jiggle, setJiggle] = useState(false);
   
+  const [messages, setMessages] = useState<{role: 'user' | 'bot' | 'analysis', text?: string, data?: PlantAnalysis}[]>(() => 
+    JSON.parse(localStorage.getItem('bio_messages') || '[]')
+  );
+  const [history, setHistory] = useState<PlantAnalysis[]>(() => 
+    JSON.parse(localStorage.getItem('bio_history') || '[]')
+  );
+  const [stats, setStats] = useState<UserStats>(() => 
+    JSON.parse(localStorage.getItem('bio_stats') || '{"xp":0,"level":1,"totalScans":0,"completedQuests":[],"activeQuests":[]}')
+  );
+  
+  const [chatInput, setChatInput] = useState('');
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isGamesOpen, setIsGamesOpen] = useState(false);
   const [darkMode, setDarkMode] = useState(() => localStorage.getItem('theme') === 'dark');
   
-  // Settings states
   const [notifEnabled, setNotifEnabled] = useState(true);
   const [alertsEnabled, setAlertsEnabled] = useState(true);
   const [hapticEnabled, setHapticEnabled] = useState(true);
-  const [cloudSync, setCloudSync] = useState(false);
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [stream, setStream] = useState<MediaStream | null>(null);
+
+  // Timer per l'oscillazione dei tasti ogni 2 minuti
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setJiggle(true);
+      setTimeout(() => setJiggle(false), 2500);
+    }, 120000);
+    return () => clearInterval(interval);
+  }, []);
 
   useEffect(() => {
     document.body.setAttribute('data-theme', darkMode ? 'dark' : 'light');
@@ -666,10 +673,15 @@ function App() {
   useEffect(() => {
     localStorage.setItem('bio_history', JSON.stringify(history));
     localStorage.setItem('bio_stats', JSON.stringify(stats));
-  }, [history, stats]);
+    localStorage.setItem('bio_messages', JSON.stringify(messages));
+  }, [history, stats, messages]);
 
   useEffect(() => {
-    if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    if (scrollRef.current) {
+      setTimeout(() => {
+        if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+      }, 100);
+    }
   }, [messages, isChatLoading, activeMode]);
 
   const addXp = (amount: number) => {
@@ -679,6 +691,24 @@ function App() {
       if (nxp >= nl * 100) { nxp -= nl * 100; nl += 1; }
       return { ...prev, xp: nxp, level: nl };
     });
+  };
+
+  const toggleQuest = (id: string) => {
+    setStats(prev => {
+      const active = prev.activeQuests || [];
+      if (active.includes(id)) return prev;
+      return { ...prev, activeQuests: [...active, id] };
+    });
+  };
+
+  const claimQuestReward = (id: string, xp: number) => {
+    setStats(prev => {
+      const active = (prev.activeQuests || []).filter(q => q !== id);
+      const completed = [...(prev.completedQuests || []), id];
+      return { ...prev, activeQuests: active, completedQuests: completed, xp: prev.xp + xp };
+    });
+    // Level up logic handled in separate effect or addXp if called
+    addXp(0); 
   };
 
   const stopCamera = () => {
@@ -713,15 +743,25 @@ function App() {
   const sendMessage = async (txt?: string) => {
     const input = txt || chatInput;
     if (!input.trim()) return;
+    
+    const lastAnalysis = [...messages].reverse().find(m => m.role === 'analysis')?.data;
+    let contextPrompt = "";
+    if (lastAnalysis) {
+      contextPrompt = `STAI PARLANDO DI: ${lastAnalysis.name} (${lastAnalysis.scientificName}). Stato: ${lastAnalysis.healthStatus}. Diagnosi: ${lastAnalysis.diagnosis}. Rispondi in italiano, stile app botanica professionale: usa icone (emoji), titoli brevi in maiuscolo e paragrafi concisi. `;
+    }
+
     setMessages(prev => [...prev, { role: 'user', text: input }]);
     setChatInput('');
     setIsChatLoading(true);
+    
     try {
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       const res = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
-        contents: input,
-        config: { systemInstruction: "Sei BioExpert, esperto botanico. Rispondi in italiano con consigli pratici." }
+        contents: contextPrompt + input,
+        config: { 
+          systemInstruction: "Sei BioExpert AI. Rispondi SEMPRE in italiano. Usa un formato strutturato: titoli in maiuscolo preceduti da emoji. Sii conciso, adatto a un'app mobile. Non superare i 300 caratteri per paragrafo." 
+        }
       });
       setMessages(prev => [...prev, { role: 'bot', text: res.text }]);
       addXp(5);
@@ -740,7 +780,7 @@ function App() {
         contents: {
           parts: [
             { inlineData: { data: capturedImg.split(',')[1], mimeType: 'image/jpeg' } },
-            { text: "Identifica la pianta. Fornisci: Nome comune (titolo), Nome scientifico, Salute, Diagnosi, Cura Generale, Innaffiatura, Potatura, Rinvaso. Rispondi in JSON." }
+            { text: "Analizza questa pianta. Restituisci JSON: Nome comune, Scientifico, Salute (healthy/sick), Diagnosi, Cura (general, watering, pruning, repotting)." }
           ]
         },
         config: {
@@ -774,7 +814,7 @@ function App() {
       addXp(20);
       setCapturedImg(null);
       setActiveMode('chat');
-    } catch (e) { alert("Analisi fallita. Riprova con un'immagine più chiara."); }
+    } catch (e) { alert("Errore di analisi. Riprova."); }
     finally { setIsAnalyzing(false); }
   };
 
@@ -788,10 +828,25 @@ function App() {
   };
 
   const resetAll = () => {
-    if (confirm("Sei sicuro di voler cancellare tutto?")) {
+    if (confirm("Reset totale dei dati?")) {
       localStorage.clear();
       window.location.reload();
     }
+  };
+
+  const clearChat = () => {
+    if (confirm("Vuoi svuotare la chat?")) {
+      setMessages([]);
+      localStorage.setItem('bio_messages', '[]');
+    }
+  };
+
+  // Verifica se una quest è completabile basandosi sulla cronologia
+  const canClaim = (req: string) => {
+    return history.some(h => 
+      h.name.toLowerCase().includes(req.toLowerCase()) || 
+      h.scientificName.toLowerCase().includes(req.toLowerCase())
+    );
   };
 
   return (
@@ -830,7 +885,7 @@ function App() {
                 </>
               ) : capturedImg ? (
                 <div style={{height: '100%', position: 'relative', background: '#000'}}>
-                  <img src={capturedImg} style={{width:'100%', height:'100%', objectFit:'cover', opacity: isAnalyzing ? 0.4 : 1}} alt="Acquisizione" />
+                  <img src={capturedImg} style={{width:'100%', height:'100%', objectFit:'cover', opacity: isAnalyzing ? 0.4 : 1}} />
                   {!isAnalyzing && (
                     <button className="btn-analyze-toast" onClick={performAnalysis}>
                       <Sparkles size={22}/> Analizza Pianta
@@ -838,8 +893,8 @@ function App() {
                   )}
                   {isAnalyzing && (
                     <div style={{position:'absolute', inset:0, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', color:'white'}}>
-                       <RefreshCw className="spinner" size={40} style={{animation: 'spin 1s linear infinite', marginBottom: 12}} />
-                       <div style={{fontWeight:800}}>Bio-Analisi in corso...</div>
+                       <RefreshCw size={40} style={{animation: 'spin 1s linear infinite', marginBottom: 12}} />
+                       <div style={{fontWeight:800}}>Analisi Bio-Molecolare...</div>
                     </div>
                   )}
                 </div>
@@ -850,8 +905,8 @@ function App() {
                     <circle cx="50" cy="22" r="14" /><circle cx="64" cy="31" r="14" /><circle cx="64" cy="48" r="14" /><circle cx="50" cy="57" r="14" /><circle cx="36" cy="48" r="14" /><circle cx="36" cy="31" r="14" /><circle cx="50" cy="39" r="10" />
                     <path d="M51 68 C70 65 75 80 52 85 Z" /><path d="M49 78 C30 75 25 90 48 95 Z" />
                   </svg>
-                  <p style={{marginTop:20, fontWeight:800, fontSize: '1.1rem', color: 'var(--primary)'}}>Fai una foto o carica un'immagine</p>
-                  <p style={{fontSize: '0.85rem', opacity: 0.7, marginTop: 4}}>Identifica malattie, specie e ottieni consigli</p>
+                  <p style={{marginTop:20, fontWeight:800, fontSize: '1.1rem', color: 'var(--primary)'}}>Diagnosi Botanica</p>
+                  <p style={{fontSize: '0.85rem', opacity: 0.7}}>Scansiona o carica una foto</p>
                 </div>
               )}
             </div>
@@ -860,34 +915,32 @@ function App() {
               {messages.length === 0 && (
                 <div className="placeholder-text" style={{opacity: 0.6}}>
                   <Bot size={48} color="var(--primary)"/>
-                  <h3 style={{margin: '12px 0 6px'}}>BioExpert AI</h3>
-                  <p>Inquadra una pianta per l'analisi o chiedi un consiglio rapido.</p>
+                  <h3 style={{margin: '12px 0 6px'}}>Assistente BioExpert</h3>
+                  <p>Inquadra una pianta o chiedimi un consiglio botanico.</p>
                 </div>
               )}
               {messages.map((m, i) => (
                 m.role === 'analysis' ? (
                   <div key={i} className="analysis-msg-container">
                     <div className="analysis-msg-header">
-                      <span>BIO-ANALISI AI</span>
+                      <span>REPORT AI</span>
                       <span><Clock size={12} style={{verticalAlign:'middle'}}/> {new Date(m.data!.timestamp).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</span>
                     </div>
                     <div className="analysis-msg-content">
                       <div className="analysis-top-row">
                         <div className="analysis-title-group">
                           <h4>{m.data?.name}</h4>
-                          <span className="sci">{m.data?.scientificName}</span>
+                          <span className="sci" style={{fontStyle:'italic', opacity:0.6, fontSize:'0.85rem'}}>{m.data?.scientificName}</span>
                         </div>
-                        <img src={m.data?.image} className="analysis-thumbnail-small" alt="Thumbnail" />
+                        <img src={m.data?.image} className="analysis-thumbnail-small" alt="Bio" />
                       </div>
                       
-                      <div style={{display:'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12}}>
-                        <div className={`status-badge`} style={{display:'inline-flex', padding:'4px 12px', borderRadius:100, fontSize:'0.7rem', fontWeight:800, background: m.data?.healthStatus === 'healthy' ? '#E8F5E9' : '#FFEBEE', color: m.data?.healthStatus === 'healthy' ? '#2E7D32' : '#C62828'}}>
-                          {m.data?.healthStatus === 'healthy' ? <CheckCircle2 size={14} style={{marginRight:6}}/> : <AlertTriangle size={14} style={{marginRight:6}}/>}
-                          {m.data?.healthStatus === 'healthy' ? 'STATO: OTTIMO' : 'STATO: CRITICO'}
-                        </div>
+                      <div className={`status-badge`} style={{display:'inline-flex', padding:'4px 12px', borderRadius:100, fontSize:'0.7rem', fontWeight:800, marginBottom:10, background: m.data?.healthStatus === 'healthy' ? '#E8F5E9' : '#FFEBEE', color: m.data?.healthStatus === 'healthy' ? '#2E7D32' : '#C62828'}}>
+                        {m.data?.healthStatus === 'healthy' ? <CheckCircle2 size={14} style={{marginRight:6}}/> : <AlertTriangle size={14} style={{marginRight:6}}/>}
+                        {m.data?.healthStatus === 'healthy' ? 'STATO: OTTIMO' : 'STATO: CRITICO'}
                       </div>
                       
-                      <p style={{fontSize:'0.92rem', opacity:0.9, margin:0, lineHeight: 1.5}}>{m.data?.diagnosis}</p>
+                      <p style={{fontSize:'0.92rem', opacity:0.95, margin:0, lineHeight: 1.5}}>{m.data?.diagnosis}</p>
 
                       <div className="care-section">
                         <div className="care-item">
@@ -920,16 +973,29 @@ function App() {
                         </div>
                       </div>
 
-                      <div className="chat-deepen-prompt" onClick={() => sendMessage(`Vorrei più dettagli sulla cura di questa pianta: ${m.data?.name}`)}>
-                         <MessageSquare size={18}/> Approfondisci in chat
+                      <div className="chat-deepen-prompt" style={{marginTop:20, padding:14, background:'var(--primary-light)', borderRadius:16, textAlign:'center', fontWeight:700, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', gap:8}} onClick={() => sendMessage(`Vorrei approfondire la cura di questa pianta: ${m.data?.name}`)}>
+                         <MessageSquare size={18}/> Approfondisci in Chat
                       </div>
                     </div>
                   </div>
                 ) : (
-                  <div key={i} className={`msg msg-${m.role}`}>{m.text}</div>
+                  <div key={i} className={`msg msg-${m.role}`}>
+                    {m.role === 'bot' ? (
+                      <div className="structured-bot-msg">
+                        {m.text?.split('\n').map((line, idx) => {
+                          const isTitle = line.trim().match(/^[A-Z\s]+$/) || line.includes(':');
+                          return (
+                            <div key={idx} className={isTitle ? "bot-line-title" : ""}>
+                              {line}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ) : m.text}
+                  </div>
                 )
               ))}
-              {isChatLoading && <div className="msg msg-bot" style={{opacity:0.5}}>Sto elaborando...</div>}
+              {isChatLoading && <div className="msg msg-bot" style={{opacity:0.5, fontStyle:'italic'}}>BioExpert AI sta elaborando...</div>}
             </div>
           )}
         </div>
@@ -940,46 +1006,68 @@ function App() {
         )}
         {activeMode === 'chat' && (
           <div className="chat-input-row">
-            <input className="input-field" placeholder="Chiedi a BioExpert..." value={chatInput} onChange={e => setChatInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && sendMessage()} />
+            <input className="input-field" placeholder="Scrivi a BioExpert..." value={chatInput} onChange={e => setChatInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && sendMessage()} />
             <button className="btn-header-icon" style={{background:'var(--primary)', color:'white', width:44, height:44}} onClick={() => sendMessage()}><Send size={20}/></button>
           </div>
         )}
       </div>
 
       <div className="action-dashboard">
-        <button className="btn-3d scatta" onClick={toggleCamera}><Camera size={26}/><span>Scatta</span></button>
-        <button className="btn-3d secondary" onClick={() => fileInputRef.current?.click()}><Upload size={26} color="var(--primary)"/><span>Carica</span></button>
-        <button className="btn-3d secondary" onClick={() => { setActiveMode('chat'); stopCamera(); }}><MessageSquare size={26} color="var(--primary)"/><span>Chat</span></button>
+        <button className={`btn-3d scatta ${jiggle ? 'jiggle-animated' : ''}`} onClick={toggleCamera}><Camera size={26}/><span>Scatta</span></button>
+        <button className={`btn-3d secondary ${jiggle ? 'jiggle-animated' : ''}`} onClick={() => fileInputRef.current?.click()}><Upload size={26} color="var(--primary)"/><span>Galleria</span></button>
+        <button className={`btn-3d secondary ${jiggle ? 'jiggle-animated' : ''}`} onClick={() => { setActiveMode('chat'); stopCamera(); }}><MessageSquare size={26} color="var(--primary)"/><span>Chat</span></button>
       </div>
 
       <input type="file" ref={fileInputRef} hidden accept="image/*" onChange={handleFileUpload} />
 
-      {/* GAMES OVERLAY */}
+      {/* GAMES OVERLAY - MIGLIORATO CON PULSANTI */}
       {isGamesOpen && (
         <div className="side-overlay">
-          <header className="overlay-header" style={{padding:16, display:'flex', alignItems:'center', gap:12}}>
+          <header className="overlay-header" style={{padding:16, display:'flex', alignItems:'center', gap:12, borderBottom: '1px solid var(--card-border)'}}>
             <button className="btn-header-icon" onClick={() => setIsGamesOpen(false)}><ChevronLeft size={24}/></button>
             <h3 style={{margin:0, flex:1, fontWeight:900}}>Sfide Botaniche</h3>
-            <Trophy size={24} color="gold" />
+            <Trophy size={24} color="#FFD700" />
           </header>
           <div className="overlay-content">
-            <div style={{background:'var(--white)', padding:20, borderRadius:24, marginBottom:20, border:'1px solid var(--card-border)'}}>
-              <div style={{fontWeight:800, marginBottom:8}}>Progresso Livello {stats.level}</div>
+            <div style={{background:'var(--white)', padding:20, borderRadius:24, marginBottom:20, border:'1px solid var(--card-border)', boxShadow: '0 4px 12px rgba(0,0,0,0.05)'}}>
+              <div style={{fontWeight:800, marginBottom:8, display:'flex', justifyContent:'space-between'}}>
+                <span>Progresso Livello {stats.level}</span>
+                <span style={{color:'var(--primary)'}}>{stats.xp} / {stats.level*100} XP</span>
+              </div>
               <div style={{height:12, background:'rgba(0,0,0,0.05)', borderRadius:10, overflow:'hidden'}}>
-                <div style={{height:'100%', width:`${(stats.xp/(stats.level*100))*100}%`, background:'var(--primary)'}}></div>
+                <div style={{height:'100%', width:`${(stats.xp/(stats.level*100))*100}%`, background:'var(--primary)', transition:'width 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275)'}}></div>
               </div>
-              <div style={{textAlign:'right', fontSize:'0.75rem', marginTop:6, fontWeight:700}}>{stats.xp} / {stats.level*100} XP</div>
             </div>
-            {QUESTS.map(q => (
-              <div key={q.id} className="game-card">
-                <div className="settings-icon-box">{q.icon}</div>
-                <div style={{flex:1}}>
-                  <div style={{fontWeight:800}}>{q.title}</div>
-                  <div style={{fontSize:'0.7rem', opacity:0.6}}>Cattura una foto per completare</div>
+
+            <div style={{fontSize: '0.8rem', fontWeight: 800, textTransform: 'uppercase', color: 'var(--primary)', marginBottom: 12, paddingLeft: 8}}>Missioni Attive</div>
+
+            {QUESTS.map(q => {
+              const isCompleted = (stats.completedQuests || []).includes(q.id);
+              const isActive = (stats.activeQuests || []).includes(q.id);
+              const readyToClaim = isActive && canClaim(q.requirement);
+
+              return (
+                <div key={q.id} className="game-card" style={{opacity: isCompleted ? 0.6 : 1, border: readyToClaim ? '2px solid #FFD700' : '1px solid var(--card-border)'}}>
+                  <div className="settings-icon-box" style={{background: isCompleted ? '#E8F5E9' : (readyToClaim ? '#FFFDE7' : 'var(--primary-light)')}}>{q.icon}</div>
+                  <div style={{flex:1}}>
+                    <div style={{fontWeight:800, fontSize:'0.9rem'}}>{q.title}</div>
+                    <div style={{fontSize:'0.7rem', opacity:0.6}}>
+                      {isCompleted ? 'Missione Completata!' : (readyToClaim ? 'Requisito trovato! Riscatta ora.' : `Obiettivo: ${q.requirement}`)}
+                    </div>
+                  </div>
+                  
+                  {isCompleted ? (
+                    <CheckCircle size={22} color="var(--primary)" />
+                  ) : readyToClaim ? (
+                    <button className="game-btn claim" onClick={() => claimQuestReward(q.id, q.xp)}><Zap size={14}/> Riscatta</button>
+                  ) : isActive ? (
+                    <button className="game-btn" disabled><Clock size={14}/> In corso</button>
+                  ) : (
+                    <button className="game-btn" onClick={() => toggleQuest(q.id)}><PlayCircle size={14}/> Attiva</button>
+                  )}
                 </div>
-                <div style={{fontWeight:900, color:'var(--primary)'}}>+{q.xp} XP</div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       )}
@@ -987,15 +1075,19 @@ function App() {
       {/* HISTORY OVERLAY */}
       {isHistoryOpen && (
         <div className="side-overlay">
-          <header style={{padding:16, display:'flex', alignItems:'center', gap:12}}>
+          <header style={{padding:16, display:'flex', alignItems:'center', gap:12, borderBottom: '1px solid var(--card-border)'}}>
             <button className="btn-header-icon" onClick={() => setIsHistoryOpen(false)}><ChevronLeft size={24}/></button>
-            <h3 style={{margin:0, fontWeight:900}}>Archivio Scoperte</h3>
+            <h3 style={{margin:0, fontWeight:900}}>Cronologia</h3>
           </header>
           <div className="overlay-content">
+            <div style={{padding: '0 8px 16px', display:'flex', justifyContent:'space-between', alignItems: 'center'}}>
+               <p style={{fontSize: '0.85rem', opacity: 0.6, margin:0}}>Archivio scoperte</p>
+               <button className="suggestion-pill" style={{padding:'4px 12px'}} onClick={clearChat}>Svuota Chat</button>
+            </div>
             {history.length === 0 ? (
               <div className="placeholder-text">
                 <History size={48} />
-                <p>Nessuna pianta salvata nell'archivio.</p>
+                <p>Nessuna pianta salvata.</p>
               </div>
             ) : history.map(h => (
               <div key={h.id} className="game-card" onClick={() => { setMessages(prev => [...prev, {role:'analysis', data:h}]); setIsHistoryOpen(false); setActiveMode('chat'); }}>
@@ -1011,29 +1103,29 @@ function App() {
         </div>
       )}
 
-      {/* SETTINGS OVERLAY - FULL RECONSTRUCTION */}
+      {/* SETTINGS OVERLAY */}
       {isSettingsOpen && (
         <div className="side-overlay">
-          <header style={{padding:16, display:'flex', alignItems:'center', gap:12}}>
+          <header style={{padding:16, display:'flex', alignItems:'center', gap:12, borderBottom: '1px solid var(--card-border)'}}>
             <button className="btn-header-icon" onClick={() => setIsSettingsOpen(false)}><ChevronLeft size={24}/></button>
             <h3 style={{margin:0, fontWeight:900}}>Configurazione</h3>
           </header>
           <div className="overlay-content">
-            <div className="settings-card" style={{padding:20, display:'flex', alignItems:'center', gap:16, background:'linear-gradient(135deg, var(--primary), var(--primary-dark))', color:'white', boxShadow: '0 8px 16px rgba(0,0,0,0.1)'}}>
+            <div className="settings-card" style={{padding:20, display:'flex', alignItems:'center', gap:16, background:'linear-gradient(135deg, var(--primary), var(--primary-dark))', color:'white'}}>
               <div style={{width:60, height:60, borderRadius:'50%', background:'rgba(255,255,255,0.2)', display:'flex', alignItems:'center', justifyContent:'center', border: '2px solid white'}}><User size={30}/></div>
               <div>
-                <div style={{fontWeight:900, fontSize:'1.15rem'}}>Profilo BioExpert</div>
-                <div style={{fontSize:'0.8rem', opacity:0.85}}>Apprendista Botanico Lv.{stats.level}</div>
+                <div style={{fontWeight:900, fontSize:'1.15rem'}}>Bio-Utente</div>
+                <div style={{fontSize:'0.8rem', opacity:0.85}}>Grado: Senior Botanist Lv.{stats.level}</div>
               </div>
             </div>
 
-            <div className="settings-section-title">Generale</div>
+            <div className="settings-section-title" style={{padding: '8px 12px', fontSize: '0.75rem', fontWeight: 800, textTransform: 'uppercase', color: 'var(--primary)'}}>Preferenze</div>
             <div className="settings-card">
               <div className="settings-row" onClick={() => setDarkMode(!darkMode)}>
                 <div className="settings-icon-box"><Moon size={18}/></div>
                 <div className="settings-text">
                   <div className="settings-label">Tema Scuro</div>
-                  <div className="settings-sub">Regola l'aspetto visivo</div>
+                  <div className="settings-sub">Ottimizza per la notte</div>
                 </div>
                 <div className={`toggle-switch ${darkMode ? 'active' : ''}`}></div>
               </div>
@@ -1041,62 +1133,34 @@ function App() {
                 <div className="settings-icon-box"><Key size={18}/></div>
                 <div className="settings-text">
                   <div className="settings-label">Gemini API Key</div>
-                  <div className="settings-sub">Configura l'intelligenza artificiale</div>
+                  <div className="settings-sub">Motore di intelligenza botanica</div>
                 </div>
                 <ExternalLink size={16} opacity={0.4}/>
               </div>
             </div>
 
-            <div className="settings-section-title">Notifiche ed Avvisi</div>
+            <div className="settings-section-title" style={{padding: '8px 12px', fontSize: '0.75rem', fontWeight: 800, textTransform: 'uppercase', color: 'var(--primary)'}}>Notifiche</div>
             <div className="settings-card">
                <div className="settings-row" onClick={() => setNotifEnabled(!notifEnabled)}>
                  <div className="settings-icon-box"><Bell size={18}/></div>
                  <div className="settings-text">
                    <div className="settings-label">Promemoria Cura</div>
-                   <div className="settings-sub">Avvisi per innaffiatura e concime</div>
+                   <div className="settings-sub">Acqua, concime e rinvaso</div>
                  </div>
                  <div className={`toggle-switch ${notifEnabled ? 'active' : ''}`}></div>
                </div>
                <div className="settings-row" onClick={() => setAlertsEnabled(!alertsEnabled)}>
                  <div className="settings-icon-box"><ShieldAlert size={18}/></div>
                  <div className="settings-text">
-                   <div className="settings-label">Avvisi Malattie</div>
-                   <div className="settings-sub">Notifiche per epidemie stagionali</div>
+                   <div className="settings-label">Allerta Malattie</div>
+                   <div className="settings-sub">Segnala parassiti locali</div>
                  </div>
                  <div className={`toggle-switch ${alertsEnabled ? 'active' : ''}`}></div>
                </div>
             </div>
 
-            <div className="settings-section-title">Altro</div>
-            <div className="settings-card">
-               <div className="settings-row" onClick={() => setHapticEnabled(!hapticEnabled)}>
-                 <div className="settings-icon-box"><Zap size={18}/></div>
-                 <div className="settings-text">
-                   <div className="settings-label">Vibrazione</div>
-                   <div className="settings-sub">Feedback tattile alle azioni</div>
-                 </div>
-                 <div className={`toggle-switch ${hapticEnabled ? 'active' : ''}`}></div>
-               </div>
-               <div className="settings-row" onClick={() => setCloudSync(!cloudSync)}>
-                 <div className="settings-icon-box"><RefreshCw size={18}/></div>
-                 <div className="settings-text">
-                   <div className="settings-label">Sincronizzazione Cloud</div>
-                   <div className="settings-sub">Salva i dati su tutti i dispositivi</div>
-                 </div>
-                 <div className={`toggle-switch ${cloudSync ? 'active' : ''}`}></div>
-               </div>
-               <div className="settings-row">
-                 <div className="settings-icon-box"><Sliders size={18}/></div>
-                 <div className="settings-text">
-                   <div className="settings-label">Preferenze Avanzate</div>
-                   <div className="settings-sub">Dettagli analisi e privacy</div>
-                 </div>
-                 <ChevronRight size={16} opacity={0.4}/>
-               </div>
-            </div>
-
-            <button className="btn-reset" onClick={resetAll}><Trash2 size={18}/> Resetta Tutti i Dati</button>
-            <div style={{textAlign:'center', marginTop:24, opacity:0.4, fontSize:'0.75rem', paddingBottom: 20}}>BioExpert AI v1.8.0 - Professional Care</div>
+            <button className="btn-reset" onClick={resetAll}><Trash2 size={18}/> Reset Totale</button>
+            <div style={{textAlign:'center', marginTop:24, opacity:0.4, fontSize:'0.75rem'}}>BioExpert AI v2.0.0 - Advanced Care</div>
           </div>
         </div>
       )}
