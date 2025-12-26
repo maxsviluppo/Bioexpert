@@ -1,9 +1,8 @@
 
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { createRoot } from 'react-dom/client';
 import { GoogleGenAI, Type } from '@google/genai';
-// Added Heart and ChevronRight to the import list below
-import { Camera, Send, Sprout, Info, RefreshCw, MessageSquare, Droplets, AlertTriangle, CheckCircle2, Settings, Moon, Bell, Mountain, Sparkles, History, Share2, Trash2, Zap, ChevronLeft, Key, ExternalLink, Trophy, Target, Gamepad2, Upload, User, ShieldAlert, Clock, Leaf, Apple, Scissors, Wind, Layers, Home, Maximize2, Smartphone, Terminal, ArrowRight, Heart, ChevronRight } from 'lucide-react';
+import { Camera, Send, Sprout, Info, RefreshCw, MessageSquare, Droplets, AlertTriangle, CheckCircle2, Settings, Moon, Bell, Mountain, Sparkles, History, Share2, Trash2, Zap, ChevronLeft, Key, ExternalLink, Trophy, Target, Gamepad2, Upload, User, ShieldAlert, Clock, Leaf, Apple, Layers, Maximize2, Terminal, ChevronRight, Star, Award, Sun, CameraOff, HelpCircle, ShieldCheck, Heart, LogOut, Mail, Code, Scissors, Inbox } from 'lucide-react';
 
 // --- STYLES ---
 const styles = `
@@ -152,8 +151,6 @@ const styles = `
     align-items: center;
   }
 
-  [data-theme='dark'] .frame-inner { background: #000; }
-
   .preview-container {
     height: 100%;
     width: 100%;
@@ -178,6 +175,81 @@ const styles = `
     background: #000;
   }
 
+  .viewfinder {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 260px;
+    height: 260px;
+    pointer-events: none;
+    z-index: 105;
+  }
+  .viewfinder-corner {
+    position: absolute;
+    width: 30px;
+    height: 30px;
+    border: 3px solid white;
+    opacity: 0.6;
+  }
+  .tl { top: 0; left: 0; border-right: 0; border-bottom: 0; border-top-left-radius: 20px; }
+  .tr { top: 0; right: 0; border-left: 0; border-bottom: 0; border-top-right-radius: 20px; }
+  .bl { bottom: 0; left: 0; border-right: 0; border-top: 0; border-bottom-left-radius: 20px; }
+  .br { bottom: 0; right: 0; border-left: 0; border-top: 0; border-bottom-right-radius: 20px; }
+
+  .logo-center-overlay {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    opacity: 0.3;
+    color: white;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    z-index: 104;
+    text-align: center;
+  }
+
+  .logo-center-overlay h2 {
+    margin: 0;
+    font-size: 0.8rem;
+    font-weight: 800;
+    letter-spacing: 0.3em;
+    text-transform: uppercase;
+  }
+
+  .camera-off-overlay {
+    height: 100%;
+    width: 100%;
+    background: var(--primary-light);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .logo-off-center {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    color: var(--primary);
+    opacity: 0.2;
+    transform: scale(1.2);
+  }
+
+  .logo-off-center h2 {
+    margin: 0;
+    font-size: 1rem;
+    font-weight: 800;
+    letter-spacing: 0.4em;
+    text-transform: uppercase;
+  }
+
   .btn-analyze-toast {
     position: absolute;
     bottom: 30px;
@@ -198,7 +270,6 @@ const styles = `
     z-index: 150;
     animation: toastIn 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
     font-size: 1.1rem;
-    text-shadow: 0 1px 2px rgba(0,0,0,0.2);
   }
 
   @keyframes toastIn {
@@ -229,8 +300,35 @@ const styles = `
 
   @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
 
-  .msg-user { align-self: flex-end; background: var(--primary); color: white; border-bottom-right-radius: 4px; }
-  .msg-bot { align-self: flex-start; background: var(--white); color: var(--dark); border-bottom-left-radius: 4px; border: 1px solid var(--card-border); }
+  .msg-user { align-self: flex-end; background: var(--primary); color: white; border-bottom-right-radius: 4px; box-shadow: 0 4px 12px rgba(46, 125, 50, 0.2); }
+  .msg-bot { align-self: flex-start; background: var(--white); color: var(--dark); border-bottom-left-radius: 4px; border: 1px solid var(--card-border); box-shadow: 0 4px 12px rgba(0,0,0,0.03); }
+
+  .quick-replies-container {
+    display: flex;
+    gap: 8px;
+    padding: 8px 16px 12px;
+    overflow-x: auto;
+    white-space: nowrap;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+  .quick-replies-container::-webkit-scrollbar { display: none; }
+
+  .quick-reply-chip {
+    background: var(--primary-light);
+    color: var(--primary);
+    padding: 8px 16px;
+    border-radius: 100px;
+    font-size: 0.8rem;
+    font-weight: 700;
+    border: 1px solid var(--accent);
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .quick-reply-chip:active { transform: scale(0.95); background: var(--accent); }
 
   .chat-input-row {
     padding: 8px 12px 16px;
@@ -250,6 +348,7 @@ const styles = `
     font-size: 0.95rem;
     outline: none;
     color: var(--dark);
+    font-family: inherit;
   }
 
   .action-dashboard {
@@ -295,60 +394,6 @@ const styles = `
 
   .overlay-content { flex: 1; overflow-y: auto; padding: 20px; scroll-behavior: smooth; }
 
-  .settings-card {
-    background: var(--white);
-    border-radius: 24px;
-    border: 1px solid var(--card-border);
-    margin-bottom: 16px;
-    overflow: hidden;
-  }
-
-  .settings-row {
-    display: flex;
-    align-items: center;
-    gap: 16px;
-    padding: 16px 20px;
-    border-bottom: 1px solid var(--card-border);
-    cursor: pointer;
-    transition: background 0.2s;
-  }
-  .settings-row:active { background: var(--primary-light); }
-  .settings-row:last-child { border-bottom: none; }
-
-  .settings-icon-box {
-    width: 40px;
-    height: 40px;
-    border-radius: 12px;
-    background: var(--primary-light);
-    color: var(--primary);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    flex-shrink: 0;
-  }
-
-  .toggle-switch {
-    width: 44px;
-    height: 24px;
-    background: #E0E0E0;
-    border-radius: 20px;
-    position: relative;
-    transition: background 0.3s;
-  }
-  .toggle-switch.active { background: var(--primary); }
-  .toggle-switch::after {
-    content: '';
-    width: 20px;
-    height: 20px;
-    background: white;
-    border-radius: 50%;
-    position: absolute;
-    top: 2px;
-    left: 2px;
-    transition: transform 0.3s;
-  }
-  .toggle-switch.active::after { transform: translateX(20px); }
-
   .shutter-layer {
     position: absolute;
     bottom: 24px;
@@ -373,38 +418,6 @@ const styles = `
   }
   .shutter-inner { width: 100%; height: 100%; background: white; border-radius: 50%; }
 
-  .placeholder-text {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    text-align: center;
-    padding: 40px;
-    height: 100%;
-    width: 100%;
-    background: var(--bg-warm);
-  }
-
-  .sway-animated {
-    animation: plantSway 6s cubic-bezier(0.445, 0.05, 0.55, 0.95) infinite;
-    transform-origin: 50% 90%;
-  }
-  @keyframes plantSway {
-    0%, 100% { transform: rotate(-3deg); }
-    50% { transform: rotate(3deg); }
-  }
-
-  @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
-
-  .analysis-thumbnail-small {
-    width: 60px;
-    height: 60px;
-    border-radius: 12px;
-    object-fit: cover;
-    border: 2px solid white;
-    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
-  }
-
   .status-badge {
     display: inline-flex;
     align-items: center;
@@ -418,29 +431,168 @@ const styles = `
   .status-healthy { background: #E8F5E9; color: #2E7D32; }
   .status-sick { background: #FFEBEE; color: #D32F2F; }
 
-  .chat-btn-group {
+  .settings-section { margin-bottom: 28px; }
+  .settings-section-title {
+    font-size: 0.7rem;
+    font-weight: 800;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    margin: 0 0 10px 14px;
+    letter-spacing: 0.08em;
+  }
+  .settings-group {
+    background: var(--white);
+    border-radius: 28px;
+    border: 1px solid var(--card-border);
+    overflow: hidden;
+  }
+  .settings-row {
     display: flex;
-    flex-direction: column;
-    gap: 8px;
-    margin-top: 12px;
+    align-items: center;
+    gap: 16px;
+    padding: 14px 18px;
+    cursor: pointer;
+    transition: background 0.2s;
+    border-bottom: 1px solid var(--card-border);
+  }
+  .settings-row:last-child { border-bottom: none; }
+  .settings-row:active { background: var(--primary-light); }
+  
+  .settings-icon-box {
+    width: 38px;
+    height: 38px;
+    border-radius: 12px;
+    background: var(--primary-light);
+    color: var(--primary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
   }
 
-  .chat-deepen-prompt {
+  .toggle-switch {
+    width: 44px;
+    height: 24px;
+    background: #E0E0E0;
+    border-radius: 20px;
+    position: relative;
+    transition: background 0.3s;
+  }
+  .toggle-switch.active { background: var(--primary); }
+  .toggle-switch::after {
+    content: '';
+    width: 20px;
+    height: 20px;
+    background: white;
+    border-radius: 50%;
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    transition: transform 0.3s;
+  }
+  .toggle-switch.active::after { transform: translateX(20px); }
+
+  .profile-card {
+    padding: 24px;
+    background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+    border-radius: 32px;
+    color: white;
+    display: flex;
+    align-items: center;
+    gap: 18px;
+    margin-bottom: 30px;
+    box-shadow: 0 10px 20px rgba(0,0,0,0.1);
+  }
+  .profile-avatar {
+    width: 64px;
+    height: 64px;
+    border-radius: 22px;
+    background: rgba(255,255,255,0.2);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .quest-card {
+    background: var(--white);
+    border-radius: 24px;
+    padding: 18px;
+    border: 1px solid var(--card-border);
+    margin-bottom: 12px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+  }
+  .quest-icon {
+    width: 52px;
+    height: 52px;
+    border-radius: 16px;
+    background: var(--primary-light);
+    color: var(--primary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .devtools-card {
+    background: var(--white);
+    padding: 20px;
+    border-radius: 24px;
+    border: 1px solid var(--card-border);
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .btn-contact {
+    background: var(--primary);
+    color: white;
+    border: none;
     padding: 12px;
-    border-radius: 14px;
-    font-size: 0.85rem;
-    font-weight: 700;
-    cursor: pointer;
+    border-radius: 100px;
+    font-weight: 800;
+    font-family: inherit;
     display: flex;
     align-items: center;
     justify-content: center;
     gap: 8px;
-    transition: all 0.2s;
-    border: none;
+    text-decoration: none;
+    transition: transform 0.2s;
   }
-  .chat-deepen-prompt.primary { background: var(--primary); color: white; }
-  .chat-deepen-prompt.secondary { background: var(--primary-light); color: var(--primary); }
-  .chat-deepen-prompt.action { background: var(--accent); color: var(--primary-dark); }
+  .btn-contact:active { transform: scale(0.95); }
+
+  .care-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    margin-top: 16px;
+  }
+  
+  .care-item {
+    background: var(--primary-light);
+    padding: 14px;
+    border-radius: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  
+  .care-item-title {
+    font-weight: 800;
+    font-size: 0.8rem;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--primary-dark);
+  }
+  
+  .care-item-desc {
+    font-size: 0.75rem;
+    line-height: 1.4;
+    opacity: 0.8;
+  }
+
+  @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+  .spin { animation: spin 1s linear infinite; }
 `;
 
 // --- TYPES ---
@@ -467,24 +619,19 @@ interface UserStats {
   level: number;
   totalScans: number;
   completedQuests: string[];
-  activeQuests: string[];
 }
 
 const QUESTS = [
-  { id: 'mushroom', title: 'Cacciatore di Funghi', icon: <Mountain size={20}/>, xp: 50, requirement: 'Fungo' },
-  { id: 'succulent', title: 'Esperto di Grasse', icon: <Sprout size={20}/>, xp: 30, requirement: 'Succulenta' },
-  { id: 'flower_red', title: 'Cuore Rosso', icon: <Target size={20}/>, xp: 40, requirement: 'Fiore' },
-  { id: 'aromatic', title: 'Mastro Aromi', icon: <Leaf size={20}/>, xp: 35, requirement: 'Aromatica' },
-  { id: 'indoor', title: 'Giardiniere d\'Interni', icon: <Layers size={20}/>, xp: 45, requirement: 'Interno' },
-  { id: 'exotic', title: 'Scopritore Esotico', icon: <Apple size={20}/>, xp: 60, requirement: 'Esotica' },
-  { id: 'rose', title: 'Il Poeta delle Rose', icon: <Heart size={18}/>, xp: 40, requirement: 'Rosa' },
-  { id: 'tree', title: 'Amico degli Alberi', icon: <Wind size={20}/>, xp: 50, requirement: 'Albero' }
+  { id: 'mushroom', title: 'Cacciatore di Funghi', icon: <Mountain size={24}/>, xp: 120, requirement: 'Fungo', desc: 'Trova e analizza un fungo.' },
+  { id: 'succulent', title: 'Giungla Arida', icon: <Sprout size={24}/>, xp: 50, requirement: 'Succulenta', desc: 'Analizza una pianta grassa.' },
+  { id: 'aromatic', title: 'Chef Botanico', icon: <Leaf size={24}/>, xp: 45, requirement: 'Erba Aromatica', desc: 'Analizza un\'erba aromatica.' },
+  { id: 'flower', title: 'Amante dei Fiori', icon: <Target size={24}/>, xp: 60, requirement: 'Fiore', desc: 'Identifica 3 fiori diversi.' }
 ];
 
-// --- APP COMPONENT ---
 function App() {
   const [activeMode, setActiveMode] = useState<'scan' | 'chat'>('scan');
-  const [isCameraOn, setIsCameraOn] = useState(false);
+  const [isCameraOn, setIsCameraOn] = useState(true);
+  const [cameraError, setCameraError] = useState<string | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [capturedImg, setCapturedImg] = useState<string | null>(null);
   const [isChatLoading, setIsChatLoading] = useState(false);
@@ -492,11 +639,9 @@ function App() {
   const [isGamesOpen, setIsGamesOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
-
-  // Settings
+  const [achievementToast, setAchievementToast] = useState<string | null>(null);
   const [darkMode, setDarkMode] = useState(() => localStorage.getItem('theme') === 'dark');
-  const [testingApiKey, setTestingApiKey] = useState(false);
-  const [apiTestResult, setApiTestResult] = useState<'success' | 'error' | null>(null);
+  const [chatInput, setChatInput] = useState('');
   
   const [messages, setMessages] = useState<{role: 'user' | 'bot' | 'analysis', text?: string, data?: PlantAnalysis}[]>(() => 
     JSON.parse(localStorage.getItem('bio_messages') || '[]')
@@ -505,10 +650,9 @@ function App() {
     JSON.parse(localStorage.getItem('bio_history') || '[]')
   );
   const [stats, setStats] = useState<UserStats>(() => 
-    JSON.parse(localStorage.getItem('bio_stats') || '{"xp":0,"level":1,"totalScans":0,"completedQuests":[],"activeQuests":[]}')
+    JSON.parse(localStorage.getItem('bio_stats') || '{"xp":0,"level":1,"totalScans":0,"completedQuests":[]}')
   );
   
-  const [chatInput, setChatInput] = useState('');
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -534,75 +678,78 @@ function App() {
     }
   }, [messages, isChatLoading, activeMode]);
 
-  // Gestione Camera migliorata per risolvere lo schermo bianco
   useEffect(() => {
+    let currentStream: MediaStream | null = null;
     async function startCamera() {
-      if (isCameraOn && !capturedImg) {
+      const shouldBeOn = activeMode === 'scan' && !capturedImg && isCameraOn && !isSettingsOpen && !isGamesOpen && !isHistoryOpen && !fullScreenAnalysis;
+      if (shouldBeOn) {
         try {
-          const stream = await navigator.mediaDevices.getUserMedia({ 
+          setCameraError(null);
+          currentStream = await navigator.mediaDevices.getUserMedia({ 
             video: { facingMode: 'environment', width: { ideal: 1920 }, height: { ideal: 1080 } }, 
             audio: false 
           });
-          streamRef.current = stream;
+          streamRef.current = currentStream;
           if (videoRef.current) {
-            videoRef.current.srcObject = stream;
-            // Forza il play dopo un piccolo frame per assicurare l'aggancio
-            videoRef.current.onloadedmetadata = () => {
-              videoRef.current?.play().catch(e => console.error("Video play error", e));
-            };
+            videoRef.current.srcObject = currentStream;
+            videoRef.current.onloadedmetadata = () => videoRef.current?.play().catch(console.error);
           }
-        } catch (err) {
-          console.error("Camera access error:", err);
-          alert("Impossibile accedere alla fotocamera. Verifica i permessi del browser.");
-          setIsCameraOn(false);
+        } catch (err: any) {
+          console.error(err);
+          setCameraError("Camera non accessibile.");
+        }
+      } else {
+        if (streamRef.current) {
+          streamRef.current.getTracks().forEach(t => t.stop());
+          streamRef.current = null;
         }
       }
     }
-
     startCamera();
-
-    return () => {
-      if (streamRef.current) {
-        streamRef.current.getTracks().forEach(track => track.stop());
-        streamRef.current = null;
-      }
-    };
-  }, [isCameraOn, capturedImg]);
+    return () => { if (currentStream) currentStream.getTracks().forEach(t => t.stop()); };
+  }, [activeMode, capturedImg, isCameraOn, isSettingsOpen, isGamesOpen, isHistoryOpen, fullScreenAnalysis]);
 
   const addXp = (amount: number) => {
     setStats(prev => {
       let nxp = prev.xp + amount;
       let nl = prev.level;
-      if (nxp >= nl * 100) { nxp -= nl * 100; nl += 1; }
+      while (nxp >= nl * 100) { nxp -= nl * 100; nl += 1; }
       return { ...prev, xp: nxp, level: nl };
     });
   };
 
   const toggleCamera = () => {
-    if (isCameraOn) {
-      setIsCameraOn(false);
-    } else {
-      setCapturedImg(null);
+    if (activeMode !== 'scan') {
       setActiveMode('scan');
       setIsCameraOn(true);
+    } else {
+      setIsCameraOn(!isCameraOn);
     }
+    setCapturedImg(null);
   };
 
   const capture = () => {
     if (!videoRef.current || !canvasRef.current) return;
     const c = canvasRef.current;
     const v = videoRef.current;
-    
-    // Crop quadrato perfetto
     const size = Math.min(v.videoWidth, v.videoHeight);
     const startX = (v.videoWidth - size) / 2;
     const startY = (v.videoHeight - size) / 2;
-    
     c.width = 1024; c.height = 1024;
     c.getContext('2d')?.drawImage(v, startX, startY, size, size, 0, 0, 1024, 1024);
-    
     setCapturedImg(c.toDataURL('image/jpeg'));
-    setIsCameraOn(false);
+  };
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      setCapturedImg(ev.target?.result as string);
+      setActiveMode('scan');
+      setIsCameraOn(false);
+    };
+    reader.readAsDataURL(file);
   };
 
   const performAnalysis = async () => {
@@ -615,7 +762,7 @@ function App() {
         contents: {
           parts: [
             { inlineData: { data: capturedImg.split(',')[1], mimeType: 'image/jpeg' } },
-            { text: "Identifica questa pianta. Restituisci JSON: Nome comune, Scientifico, Salute (healthy/sick), Diagnosi, Cura (general, watering, pruning, repotting)." }
+            { text: "Identifica questa pianta/fungo/frutto. Restituisci JSON: Nome comune, Scientifico, Salute (healthy/sick), Diagnosi completa (inclusi sintomi se malata), Cura specifica (general, watering, pruning, repotting). Lingua: Italiano." }
           ]
         },
         config: {
@@ -646,100 +793,71 @@ function App() {
       const entry: PlantAnalysis = { ...data, id: crypto.randomUUID(), timestamp: Date.now(), image: capturedImg };
       setMessages(prev => [...prev, { role: 'analysis', data: entry }]);
       setHistory(prev => [entry, ...prev]);
-      addXp(20);
+      addXp(30);
       setCapturedImg(null);
       setActiveMode('chat');
-    } catch (e) { alert("Errore durante l'analisi botanica. Riprova."); }
+    } catch (e) { alert("Errore analisi."); }
     finally { setIsAnalyzing(false); }
   };
 
   const sendMessage = async (txt?: string) => {
     const input = txt || chatInput;
     if (!input.trim()) return;
-    
-    const lastAnalysis = [...messages].reverse().find(m => m.role === 'analysis')?.data;
-    let contextPrompt = "";
-    if (lastAnalysis) {
-      contextPrompt = `L'utente ha analizzato: ${lastAnalysis.name}. Rispondi come esperto agronomo in italiano. `;
-    }
-
     setMessages(prev => [...prev, { role: 'user', text: input }]);
     setChatInput('');
     setIsChatLoading(true);
-    
     try {
+      const lastAnalysis = [...messages].reverse().find(m => m.role === 'analysis')?.data;
+      const context = lastAnalysis ? `L'utente ha analizzato un ${lastAnalysis.name}. Rispondi in base a questa pianta se pertinente, fornendo diagnosi o cure se richiesto.` : "";
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       const res = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
-        contents: contextPrompt + input,
-        config: { 
-          systemInstruction: "Sei BioExpert AI. Esperto in botanica, patologie vegetali e cura del verde. Rispondi con tono professionale ma accessibile. Usa icone." 
-        }
+        contents: context + input,
+        config: { systemInstruction: "Sei BioExpert AI. Rispondi brevemente e professionalmente in Italiano. Usa un tono amichevole ma esperto. Se la pianta è malata, sii molto specifico sulla cura." }
       });
-      setMessages(prev => [...prev, { role: 'bot', text: res.text || "Mi scuso, c'è stato un errore nel generare la risposta." }]);
+      setMessages(prev => [...prev, { role: 'bot', text: res.text || "Errore risposta." }]);
       addXp(5);
-    } catch (e) {
-      setMessages(prev => [...prev, { role: 'bot', text: "Errore di connessione con l'intelligenza artificiale." }]);
-    } finally { setIsChatLoading(false); }
+    } catch (e) { setMessages(prev => [...prev, { role: 'bot', text: "Errore connessione." }]); }
+    finally { setIsChatLoading(false); }
   };
 
-  const testApiKey = async () => {
-    setTestingApiKey(true);
-    setApiTestResult(null);
-    try {
-      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-      await ai.models.generateContent({
-        model: 'gemini-3-flash-preview',
-        contents: "Test",
-        config: { maxOutputTokens: 2 }
-      });
-      setApiTestResult('success');
-    } catch (e) {
-      setApiTestResult('error');
-    } finally {
-      setTestingApiKey(false);
-      setTimeout(() => setApiTestResult(null), 3000);
-    }
-  };
+  const lastPlantName = useMemo(() => {
+    const last = [...messages].reverse().find(m => m.role === 'analysis');
+    return last?.data?.name;
+  }, [messages]);
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      const r = new FileReader();
-      r.onload = (ev) => { 
-        setCapturedImg(ev.target?.result as string); 
-        setActiveMode('scan'); 
-        setIsCameraOn(false);
-      };
-      r.readAsDataURL(file);
-    }
-  };
-
-  const canClaim = (req: string) => {
-    return history.some(h => 
-      h.name.toLowerCase().includes(req.toLowerCase()) || 
-      h.scientificName.toLowerCase().includes(req.toLowerCase())
-    );
-  };
+  const quickReplies = useMemo(() => {
+    if (!lastPlantName) return ["Consigli cura generali", "Piante facili", "Perché le foglie ingialliscono?"];
+    return [
+      `Cura ${lastPlantName}`,
+      `È velenosa?`,
+      `Rinvaso ${lastPlantName}`,
+      `Luce per ${lastPlantName}`,
+      `Malattie comuni`
+    ];
+  }, [lastPlantName]);
 
   return (
     <div className="app-shell">
       <style>{styles}</style>
+      
+      {achievementToast && <div className="achievement-toast"><Trophy size={18}/> {achievementToast}</div>}
+
       <header>
-        <div className="logo">
+        <div className="logo" onClick={() => { setActiveMode('scan'); setIsCameraOn(true); }} style={{cursor:'pointer'}}>
           <Sprout size={24} color="var(--primary)" />
           <div>
             <h1>BioExpert</h1>
-            <div style={{height: 4, background: 'rgba(0,0,0,0.05)', borderRadius: 2, overflow: 'hidden', marginTop: 2}}>
-              <div style={{height: '100%', background: 'var(--primary)', width: `${(stats.xp / (stats.level * 100)) * 100}%`, transition: 'width 0.3s'}}></div>
+            <div style={{height: 4, background: 'rgba(0,0,0,0.05)', borderRadius: 2, overflow: 'hidden', marginTop: 2, width: 60}}>
+              <div style={{height: '100%', background: 'var(--primary)', width: `${(stats.xp / (stats.level * 100)) * 100}%`}}></div>
             </div>
           </div>
         </div>
         <div className="header-actions">
           <div className="badge-xp-large">LV.{stats.level}</div>
-          <button className="btn-header-icon" onClick={() => setIsHistoryOpen(true)}><History size={20}/></button>
-          <button className="btn-header-icon" onClick={() => setIsGamesOpen(true)}><Gamepad2 size={20}/></button>
-          <button className="btn-header-icon" onClick={() => setIsSettingsOpen(true)}><Settings size={20}/></button>
+          <button className="btn-header-icon" onClick={() => setIsHistoryOpen(true)} aria-label="Erbario"><History size={20}/></button>
+          <button className="btn-header-icon" onClick={() => setIsGamesOpen(true)} aria-label="Sfide"><Gamepad2 size={20}/></button>
+          <button className="btn-header-icon" onClick={() => setIsSettingsOpen(true)} aria-label="Impostazioni"><Settings size={20}/></button>
         </div>
       </header>
 
@@ -747,303 +865,251 @@ function App() {
         <div className="frame-inner">
           {activeMode === 'scan' ? (
             <div style={{height: '100%', width: '100%', position: 'relative'}}>
-              {isCameraOn && !capturedImg ? (
-                <>
-                  <video ref={videoRef} className="camera-video" autoPlay playsInline muted />
-                  <div className="shutter-layer">
-                    <button className="shutter-btn" onClick={capture}>
-                      <div className="shutter-inner"></div>
-                    </button>
-                  </div>
-                </>
+              {cameraError ? (
+                <div className="camera-error-view" style={{textAlign:'center', color:'white', padding:40}}><ShieldAlert size={64} color="var(--danger)" /><h3>Errore Camera</h3></div>
               ) : capturedImg ? (
                 <div className="preview-container">
                   <img src={capturedImg} className="preview-image" />
-                  {!isAnalyzing && (
-                    <button className="btn-analyze-toast" onClick={performAnalysis}>
-                      <Sparkles size={24}/> ANALIZZA PIANTA
-                    </button>
-                  )}
-                  {isAnalyzing && (
-                    <div style={{position:'absolute', inset:0, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', color:'white', background: 'rgba(0,0,0,0.7)', zIndex: 160}}>
-                       <RefreshCw size={40} style={{animation: 'spin 1s linear infinite', marginBottom: 12}} />
-                       <div style={{fontWeight:800}}>Elaborazione Bio-Dati...</div>
-                    </div>
-                  )}
+                  {!isAnalyzing && <button className="btn-analyze-toast" onClick={performAnalysis}><Sparkles size={24}/> ANALIZZA ORA</button>}
+                  {isAnalyzing && <div style={{position:'absolute', inset:0, display:'flex', alignItems:'center', justifyContent:'center', color:'white', background: 'rgba(0,0,0,0.7)'}}><RefreshCw className="spin" size={40} /></div>}
                 </div>
-              ) : (
-                <div className="placeholder-text">
-                  <div className="sway-animated" style={{color: 'var(--primary)', opacity: 0.8, marginBottom: 20}}>
-                     <Sprout size={80} />
+              ) : isCameraOn ? (
+                <>
+                  <video ref={videoRef} className="camera-video" autoPlay playsInline muted />
+                  <div className="logo-center-overlay">
+                    <Sprout size={56} />
+                    <h2>BIOEXPERT</h2>
                   </div>
-                  <h2 style={{margin: '0 0 10px 0', fontSize: '1.4rem', fontWeight: 900, color: 'var(--primary)'}}>Scanner Botanico</h2>
-                  <p style={{fontSize: '0.9rem', opacity: 0.6, maxWidth: '240px', lineHeight: 1.5}}>Fotografa foglie, fiori o frutti per una diagnosi immediata.</p>
+                  <div className="viewfinder">
+                    <div className="viewfinder-corner tl"></div>
+                    <div className="viewfinder-corner tr"></div>
+                    <div className="viewfinder-corner bl"></div>
+                    <div className="viewfinder-corner br"></div>
+                  </div>
+                  <div className="shutter-layer">
+                    <button className="shutter-btn" onClick={capture}><div className="shutter-inner"></div></button>
+                  </div>
+                </>
+              ) : (
+                <div className="camera-off-overlay">
+                  <div className="logo-off-center">
+                    <Sprout size={64} />
+                    <h2>BIOEXPERT</h2>
+                  </div>
+                  <h3 style={{marginTop:24, color:'var(--primary)', fontWeight:800}}>Fotocamera Spenta</h3>
+                  <button onClick={() => setIsCameraOn(true)} style={{background:'var(--primary)', color:'white', border:'none', padding:'12px 24px', borderRadius:100, fontWeight:800, marginTop:16, cursor:'pointer'}}>ATTIVA ORA</button>
                 </div>
               )}
             </div>
           ) : (
             <div className="frame-chat-area" ref={scrollRef}>
-              {messages.length === 0 && (
-                 <div style={{textAlign:'center', padding:40, opacity:0.3}}>
-                    <MessageSquare size={48} style={{margin:'0 auto 10px'}}/>
-                    <p>Inizia una conversazione o fai una scansione.</p>
-                 </div>
-              )}
+              {messages.length === 0 && <div style={{textAlign:'center', padding:'60px 20px', opacity:0.3}}><MessageSquare size={48} style={{margin:'0 auto 16px'}}/><p>Analizza una pianta o fai una domanda per iniziare.</p></div>}
               {messages.map((m, i) => (
                 m.role === 'analysis' ? (
-                  <div key={i} style={{background: 'var(--white)', borderRadius: 24, overflow: 'hidden', border: '1px solid var(--card-border)', boxShadow: '0 4px 12px rgba(0,0,0,0.04)'}}>
-                    <div style={{padding: '12px 16px', background: 'var(--primary-light)', color: 'var(--primary-dark)', fontSize: '0.75rem', fontWeight: 800, display: 'flex', justifyContent: 'space-between', alignItems: 'center'}}>
-                      <span>REPORT BIOLOGICO AI</span>
-                      <Clock size={12}/>
+                  <div key={i} style={{background: 'var(--white)', borderRadius: 24, border: '1px solid var(--card-border)', padding: 16, marginBottom: 8}}>
+                    <div style={{display:'flex', gap: 12, marginBottom: 12}}>
+                      <div style={{flex:1}}><h4 style={{margin:0}}>{m.data?.name}</h4><span style={{fontSize:'0.7rem', opacity:0.5}}>{m.data?.scientificName}</span></div>
+                      <img src={m.data?.image} style={{width:60, height:60, borderRadius:12, objectFit:'cover'}} />
                     </div>
-                    <div style={{padding: 16}}>
-                      <div style={{display:'flex', gap: 12, marginBottom: 12}}>
-                        <div style={{flex:1}}>
-                          <h4 style={{margin:0, fontSize:'1.2rem', fontWeight: 900}}>{m.data?.name}</h4>
-                          <span style={{fontSize:'0.8rem', opacity:0.6, fontStyle: 'italic'}}>{m.data?.scientificName}</span>
-                        </div>
-                        <img src={m.data?.image} className="analysis-thumbnail-small" />
-                      </div>
-                      
-                      <div className={`status-badge ${m.data?.healthStatus === 'healthy' ? 'status-healthy' : 'status-sick'}`} style={{marginBottom: 10}}>
-                        {m.data?.healthStatus === 'healthy' ? <CheckCircle2 size={14}/> : <AlertTriangle size={14}/>}
-                        {m.data?.healthStatus === 'healthy' ? 'SANA' : 'RILEVATE PATOLOGIE'}
-                      </div>
-                      
-                      <p style={{fontSize:'0.9rem', lineHeight: 1.5, margin: '8px 0', color: 'var(--text-muted)'}}>{m.data?.diagnosis}</p>
-
-                      <div className="chat-btn-group">
-                         <button className="chat-deepen-prompt primary" onClick={() => setFullScreenAnalysis(m.data!)}>
-                            <Maximize2 size={16}/> Report Completo
-                         </button>
-                         <button className="chat-deepen-prompt secondary" onClick={() => { setActiveMode('scan'); setIsCameraOn(true); }}>
-                            <Camera size={16}/> Nuova Scansione
-                         </button>
-                         <button className="chat-deepen-prompt action" onClick={() => sendMessage(`Approfondiamo la cura di ${m.data?.name}`)}>
-                            <MessageSquare size={16}/> Chiedi Consigli
-                         </button>
-                      </div>
-                    </div>
+                    <div className={`status-badge ${m.data?.healthStatus === 'healthy' ? 'status-healthy' : 'status-sick'}`}>{m.data?.healthStatus === 'healthy' ? 'SANA' : 'PROBLEMATICA'}</div>
+                    <p style={{fontSize:'0.85rem', margin:'8px 0'}}>{m.data?.diagnosis}</p>
+                    <button className="quick-reply-chip" style={{width:'100%', justifyContent:'center', border:'1px solid var(--primary)'}} onClick={() => setFullScreenAnalysis(m.data!)}><Maximize2 size={14}/> VEDI DETTAGLI E CURA</button>
                   </div>
                 ) : (
-                  <div key={i} className={`msg msg-${m.role}`}>
-                    {m.text}
-                  </div>
+                  <div key={i} className={`msg msg-${m.role}`}>{m.text}</div>
                 )
               ))}
-              {isChatLoading && <div className="msg msg-bot" style={{opacity:0.6, fontStyle:'italic'}}>BioExpert sta scrivendo...</div>}
+              {isChatLoading && <div className="msg msg-bot" style={{opacity:0.5}}><RefreshCw size={14} className="spin"/> Sto pensando...</div>}
             </div>
           )}
         </div>
         
         {activeMode === 'chat' && (
-          <div className="chat-input-row">
-            <input className="input-field" placeholder="Fai una domanda..." value={chatInput} onChange={e => setChatInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && sendMessage()} />
-            <button className="btn-header-icon" style={{background:'var(--primary)', color:'white', width:44, height:44}} onClick={() => sendMessage()}><Send size={18}/></button>
-          </div>
+          <>
+            <div className="quick-replies-container">
+              {quickReplies.map((q, idx) => (
+                <button key={idx} className="quick-reply-chip" onClick={() => sendMessage(q)}>
+                  <HelpCircle size={14}/> {q}
+                </button>
+              ))}
+            </div>
+            <div className="chat-input-row">
+              <input className="input-field" placeholder="Chiedi a BioExpert..." value={chatInput} onChange={e => setChatInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && sendMessage()} />
+              <button className="btn-header-icon" style={{background:'var(--primary)', color:'white', width:44, height:44}} onClick={() => sendMessage()}><Send size={18}/></button>
+            </div>
+          </>
         )}
       </div>
 
       <div className="action-dashboard">
-        <button className="btn-3d scatta" onClick={toggleCamera}><Camera size={26}/><span>Fotocamera</span></button>
-        <button className="btn-3d secondary" onClick={() => fileInputRef.current?.click()}><Upload size={26} color="var(--primary)"/><span>Galleria</span></button>
-        <button className="btn-3d secondary" onClick={() => { setIsCameraOn(false); setActiveMode('chat'); }}><MessageSquare size={26} color="var(--primary)"/><span>Chat AI</span></button>
+        <button className="btn-3d scatta" onClick={toggleCamera}>{isCameraOn ? <CameraOff size={26}/> : <Camera size={26}/>}<span>{isCameraOn ? 'OFF' : 'CAM'}</span></button>
+        <button className="btn-3d secondary" onClick={() => fileInputRef.current?.click()}><Upload size={26} color="var(--primary)"/><span>CARICA</span></button>
+        <button className="btn-3d secondary" onClick={() => setActiveMode('chat')}><MessageSquare size={26} color="var(--primary)"/><span>CHAT AI</span></button>
       </div>
 
       <input type="file" ref={fileInputRef} hidden accept="image/*" onChange={handleFileUpload} />
 
-      {/* MODALE IMPOSTAZIONI */}
-      {isSettingsOpen && (
-        <div className="side-overlay">
-          <header style={{padding:16, display:'flex', alignItems:'center', gap:12, borderBottom:'1px solid var(--card-border)'}}>
-            <button className="btn-header-icon" onClick={() => setIsSettingsOpen(false)}><ChevronLeft size={24}/></button>
-            <h3 style={{margin:0, fontWeight:900}}>Impostazioni</h3>
-          </header>
-          <div className="overlay-content">
-            <div className="settings-card" style={{padding:24, display:'flex', alignItems:'center', gap:16, background:'linear-gradient(135deg, var(--primary), var(--primary-dark))', color:'white', border: 'none'}}>
-              <div style={{width:64, height:64, borderRadius:'50%', background:'rgba(255,255,255,0.2)', display:'flex', alignItems:'center', justifyContent:'center', border: '2px solid white'}}><User size={32}/></div>
-              <div>
-                <div style={{fontWeight:900, fontSize:'1.2rem'}}>Bio-Utente</div>
-                <div style={{fontSize:'0.85rem', opacity:0.9}}>Livello {stats.level} Agronomo</div>
-              </div>
-            </div>
-
-            <div style={{fontSize: '0.75rem', fontWeight: 800, color: 'var(--primary)', textTransform: 'uppercase', marginBottom: 12, paddingLeft: 8}}>Preferenze Sistema</div>
-            <div className="settings-card">
-              <div className="settings-row" onClick={() => setDarkMode(!darkMode)}>
-                <div className="settings-icon-box"><Moon size={18}/></div>
-                <div style={{flex:1, fontWeight:700}}>Tema Scuro</div>
-                <div className={`toggle-switch ${darkMode ? 'active' : ''}`}></div>
-              </div>
-              <div className="settings-row" onClick={() => window.aistudio.openSelectKey()}>
-                <div className="settings-icon-box"><Key size={18}/></div>
-                <div style={{flex:1, fontWeight:700}}>Gemini API Key</div>
-                <ExternalLink size={16} opacity={0.4}/>
-              </div>
-              <div className="settings-row" onClick={testApiKey}>
-                <div className="settings-icon-box"><Terminal size={18}/></div>
-                <div style={{flex:1, fontWeight:700}}>Test API Key (Verifica)</div>
-                {testingApiKey ? <RefreshCw size={16} style={{animation:'spin 1s linear infinite'}}/> : 
-                 apiTestResult === 'success' ? <CheckCircle2 size={18} color="var(--primary)"/> :
-                 apiTestResult === 'error' ? <AlertTriangle size={18} color="var(--danger)"/> :
-                 <ChevronRight size={18} opacity={0.3}/>}
-              </div>
-            </div>
-
-            <div style={{fontSize: '0.75rem', fontWeight: 800, color: 'var(--primary)', textTransform: 'uppercase', marginBottom: 12, paddingLeft: 8, marginTop: 10}}>Notifiche</div>
-            <div className="settings-card">
-               <div className="settings-row">
-                 <div className="settings-icon-box"><Bell size={18}/></div>
-                 <div style={{flex:1, fontWeight:700}}>Promemoria Annaffiatura</div>
-                 <div className="toggle-switch active"></div>
-               </div>
-               <div className="settings-row">
-                 <div className="settings-icon-box"><ShieldAlert size={18}/></div>
-                 <div style={{flex:1, fontWeight:700}}>Alert Patologie</div>
-                 <div className="toggle-switch active"></div>
-               </div>
-            </div>
-
-            <button className="btn-reset" onClick={() => { if(confirm("Sei sicuro di voler cancellare tutta la cronologia?")) { localStorage.clear(); window.location.reload(); } }}>
-               <Trash2 size={18}/> Reset Database Locale
-            </button>
-            <div style={{textAlign:'center', marginTop:24, opacity:0.4, fontSize:'0.7rem'}}>BioExpert Pro v2.6.5</div>
-          </div>
-        </div>
-      )}
-
-      {/* Sfide Botaniche */}
-      {isGamesOpen && (
-        <div className="side-overlay">
-          <header style={{padding:16, display:'flex', alignItems:'center', gap:12, borderBottom: '1px solid var(--card-border)'}}>
-            <button className="btn-header-icon" onClick={() => setIsGamesOpen(false)}><ChevronLeft size={24}/></button>
-            <h3 style={{margin:0, flex:1, fontWeight:900}}>Sfide del Verde</h3>
-            <Trophy size={24} color="#FFD700" />
-          </header>
-          <div className="overlay-content">
-             <div style={{background:'var(--white)', padding:20, borderRadius:24, marginBottom:24, border:'1px solid var(--card-border)', boxShadow: '0 4px 15px rgba(0,0,0,0.05)'}}>
-               <div style={{fontWeight:800, marginBottom:8, display:'flex', justifyContent:'space-between', alignItems: 'center'}}>
-                 <span style={{fontSize: '1.1rem'}}>Progresso Livello {stats.level}</span>
-                 <span style={{color:'var(--primary)', fontSize: '0.9rem'}}>{stats.xp} / {stats.level*100} XP</span>
-               </div>
-               <div style={{height:14, background:'rgba(0,0,0,0.05)', borderRadius:10, overflow:'hidden'}}>
-                 <div style={{height:'100%', width:`${(stats.xp/(stats.level*100))*100}%`, background:'var(--primary)', transition:'width 0.5s' }}></div>
-               </div>
-             </div>
-
-             <div style={{fontSize: '0.8rem', fontWeight: 800, color: 'var(--primary)', textTransform: 'uppercase', marginBottom: 12, paddingLeft: 8}}>Colleziona Specie</div>
-
-             {QUESTS.map(q => {
-               const isCompleted = (stats.completedQuests || []).includes(q.id);
-               const isReady = !isCompleted && canClaim(q.requirement);
-
-               return (
-                 <div key={q.id} className="game-card" style={{opacity: isCompleted ? 0.6 : 1}}>
-                   <div className="settings-icon-box" style={{background: isCompleted ? 'var(--primary-light)' : (isReady ? '#FFFDE7' : 'var(--bg-warm)')}}>
-                     {q.icon}
-                   </div>
-                   <div style={{flex:1}}>
-                     <div style={{fontWeight:800}}>{q.title}</div>
-                     <div style={{fontSize:'0.75rem', opacity:0.6}}>
-                        {isCompleted ? 'Obiettivo raggiunto!' : (isReady ? 'Riscatta la ricompensa!' : `Scansiona: ${q.requirement}`)}
-                     </div>
-                   </div>
-                   {isCompleted ? (
-                     <CheckCircle2 size={22} color="var(--primary)"/>
-                   ) : isReady ? (
-                     <button className="game-btn claim" onClick={() => { setStats(p => ({...p, xp: p.xp + q.xp, completedQuests: [...p.completedQuests, q.id]})); addXp(0); }}><Zap size={14}/> {q.xp} XP</button>
-                   ) : (
-                     <div style={{fontSize:'0.75rem', fontWeight:700, color:'var(--primary)'}}><Target size={14} style={{verticalAlign:'middle'}}/> IN ATTESA</div>
-                   )}
-                 </div>
-               );
-             })}
-          </div>
-        </div>
-      )}
-
-      {/* Cronologia */}
       {isHistoryOpen && (
         <div className="side-overlay">
-          <header style={{padding:16, display:'flex', alignItems:'center', gap:12, borderBottom:'1px solid var(--card-border)'}}>
-            <button className="btn-header-icon" onClick={() => setIsHistoryOpen(false)}><ChevronLeft size={24}/></button>
-            <h3 style={{margin:0, fontWeight:900}}>Diario Scansioni</h3>
-          </header>
+          <header><button className="btn-header-icon" onClick={() => setIsHistoryOpen(false)}><ChevronLeft size={24}/></button><h3>Il Tuo Erbario</h3></header>
           <div className="overlay-content">
-            {history.length === 0 ? (
-              <div className="placeholder-text">
-                <History size={48} opacity={0.2} />
-                <p>Nessun record salvato.</p>
-              </div>
-            ) : history.map(h => (
-              <div key={h.id} className="game-card" style={{cursor: 'pointer'}} onClick={() => { setFullScreenAnalysis(h); setIsHistoryOpen(false); }}>
-                <img src={h.image} style={{width:60, height:60, borderRadius:14, objectFit:'cover', border:'2px solid var(--primary-light)'}} />
-                <div style={{flex:1}}>
-                  <div style={{fontWeight:800, fontSize:'1rem'}}>{h.name}</div>
-                  <div style={{fontSize:'0.75rem', opacity:0.5}}>{new Date(h.timestamp).toLocaleDateString()}</div>
-                </div>
-                <ArrowRight size={18} opacity={0.3}/>
-              </div>
-            ))}
+             {history.length === 0 ? <p style={{opacity:0.5, textAlign:'center', marginTop:40}}>Ancora nessuna pianta salvata.</p> : history.map(h => (
+               <div key={h.id} style={{padding:14, background:'var(--white)', borderRadius:24, marginBottom:12, display:'flex', alignItems:'center', gap:14, border:'1px solid var(--card-border)', boxShadow:'0 4px 10px rgba(0,0,0,0.02)'}} onClick={() => setFullScreenAnalysis(h)}>
+                 <img src={h.image} style={{width:54, height:54, borderRadius:14, objectFit:'cover'}} />
+                 <div style={{flex:1}}><div style={{fontWeight:800}}>{h.name}</div><div style={{fontSize:'0.7rem', opacity:0.5}}>{new Date(h.timestamp).toLocaleDateString()}</div></div>
+                 <ChevronRight size={18} opacity={0.3}/>
+               </div>
+             ))}
           </div>
         </div>
       )}
 
-      {/* FULL SCREEN ANALYSIS */}
-      {fullScreenAnalysis && (
+      {isGamesOpen && (
         <div className="side-overlay">
-          <header style={{padding:16, display:'flex', alignItems:'center', justifyContent:'space-between', borderBottom:'1px solid var(--card-border)'}}>
-             <button className="btn-header-icon" onClick={() => setFullScreenAnalysis(null)}><ChevronLeft size={24}/></button>
-             <h3 style={{margin:0, fontWeight:900}}>Analisi Bio-Botanica</h3>
-             <button className="btn-header-icon" onClick={() => { if(navigator.share) navigator.share({title: fullScreenAnalysis.name, text: fullScreenAnalysis.diagnosis}); }}><Share2 size={20}/></button>
-          </header>
+          <header><button className="btn-header-icon" onClick={() => setIsGamesOpen(false)}><ChevronLeft size={24}/></button><h3>Sfide Botaniche</h3></header>
           <div className="overlay-content">
-            <div style={{display:'flex', justifyContent:'center', background: '#000', borderRadius:32, overflow:'hidden', marginBottom: 20, height: 260}}>
-              <img src={fullScreenAnalysis.image} style={{width: '100%', height: '100%', objectFit: 'contain'}} />
+            <div style={{padding:'10px 10px 24px', display:'flex', justifyContent:'space-between', alignItems:'center'}}>
+              <div><div style={{fontSize:'2.4rem', fontWeight:800}}>{stats.completedQuests.length}</div> <div style={{fontSize:'0.85rem', opacity:0.6}}>Sfide Completate</div></div>
+              <div style={{textAlign:'right'}}><Award size={48} color="#FFD700" /><div style={{fontSize:'0.8rem', fontWeight:800, color:'var(--primary)'}}>MAESTRO GIARDINIERE</div></div>
             </div>
-            
-            <div className={`status-badge ${fullScreenAnalysis.healthStatus === 'healthy' ? 'status-healthy' : 'status-sick'}`} style={{fontSize: '0.9rem', marginBottom:12}}>
-               {fullScreenAnalysis.healthStatus === 'healthy' ? <CheckCircle2 size={18}/> : <AlertTriangle size={18}/>}
-               {fullScreenAnalysis.healthStatus === 'healthy' ? 'Salute Ottimale' : 'Anomalia Rilevata'}
+            {QUESTS.map(q => {
+               const done = stats.completedQuests.includes(q.id);
+               return (
+                 <div key={q.id} className="quest-card" style={{opacity: done ? 0.6 : 1, border: done ? '2px solid var(--primary)' : '1px solid var(--card-border)'}}>
+                    <div className="quest-icon" style={{background: done ? 'var(--primary-light)' : ''}}>{done ? <CheckCircle2 size={24} color="var(--primary)"/> : q.icon}</div>
+                    <div style={{flex:1}}>
+                      <div style={{fontWeight:800}}>{q.title}</div>
+                      <div style={{fontSize:'0.75rem', opacity:0.6}}>{q.desc}</div>
+                    </div>
+                    <div style={{fontWeight:800, color: done ? 'var(--primary)' : 'var(--text-muted)'}}>+{q.xp} XP</div>
+                 </div>
+               );
+            })}
+          </div>
+        </div>
+      )}
+
+      {isSettingsOpen && (
+        <div className="side-overlay">
+          <header><button className="btn-header-icon" onClick={() => setIsSettingsOpen(false)}><ChevronLeft size={24}/></button><h3>Impostazioni</h3></header>
+          <div className="overlay-content">
+            <div className="profile-card">
+              <div className="profile-avatar"><User size={32} /></div>
+              <div>
+                <div style={{fontWeight:800, fontSize:'1.2rem'}}>Bio Esploratore</div>
+                <div style={{fontSize:'0.85rem', opacity:0.9}}>Livello {stats.level} • {history.length} Piante Trovate</div>
+              </div>
             </div>
 
-            <h2 style={{margin: '0 0 4px 0', fontSize: '1.8rem', fontWeight: 900}}>{fullScreenAnalysis.name}</h2>
-            <span style={{fontSize: '1rem', color: 'var(--primary)', fontStyle: 'italic', marginBottom: 24, display: 'block'}}>{fullScreenAnalysis.scientificName}</span>
-            
-            <div style={{padding:24, background:'var(--white)', borderRadius:24, border:'1px solid var(--card-border)', marginBottom:24}}>
-               <h4 style={{marginTop:0, color:'var(--primary-dark)', display:'flex', alignItems:'center', gap:8, fontSize: '1.1rem'}}><Info size={20}/> Diagnosi BioExpert AI</h4>
-               <p style={{margin:0, lineHeight:1.7, fontSize:'1rem', opacity:0.9}}>{fullScreenAnalysis.diagnosis}</p>
+            <div className="settings-section">
+              <div className="settings-section-title">DevTools</div>
+              <div className="devtools-card">
+                <div style={{display:'flex', alignItems:'center', gap:10}}>
+                  <div className="settings-icon-box" style={{background:'var(--primary-dark)', color:'white'}}><Code size={18}/></div>
+                  <div style={{fontWeight:800, fontSize:'0.9rem'}}>BY CASTRO MASSIMO</div>
+                </div>
+                <p style={{fontSize:'0.85rem', lineHeight:1.5, margin:0, opacity:0.8}}>
+                  Questa App è realizzata da <b>DevTools by Castro Massimo</b>. Se hai bisogno di supporto, segnalazioni o di WebApp personalizzate contattaci.
+                </p>
+                <a href="mailto:castromassimo@gmail.com" className="btn-contact">
+                  <Mail size={18}/> CONTATTACI VIA E-MAIL
+                </a>
+              </div>
             </div>
 
-            <div style={{fontWeight: 800, color: 'var(--primary)', textTransform: 'uppercase', fontSize: '0.8rem', marginBottom: 16, paddingLeft: 8}}>Manuale di Cura</div>
-            <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:16, paddingBottom: 40}}>
-               <div style={{background:'var(--white)', padding:16, borderRadius:20, border:'1px solid var(--card-border)'}}>
-                  <div className="settings-icon-box"><Sprout size={18}/></div>
-                  <span style={{fontWeight:800, fontSize:'0.8rem', marginTop:8, display:'block'}}>Ambiente</span>
-                  <div style={{fontSize:'0.8rem', opacity:0.7, marginTop:4}}>{fullScreenAnalysis.care.general}</div>
-               </div>
-               <div style={{background:'var(--white)', padding:16, borderRadius:20, border:'1px solid var(--card-border)'}}>
-                  <div className="settings-icon-box"><Droplets size={18}/></div>
-                  <span style={{fontWeight:800, fontSize:'0.8rem', marginTop:8, display:'block'}}>Acqua</span>
-                  <div style={{fontSize:'0.8rem', opacity:0.7, marginTop:4}}>{fullScreenAnalysis.care.watering}</div>
-               </div>
-               <div style={{background:'var(--white)', padding:16, borderRadius:20, border:'1px solid var(--card-border)'}}>
-                  <div className="settings-icon-box"><Scissors size={18}/></div>
-                  <span style={{fontWeight:800, fontSize:'0.8rem', marginTop:8, display:'block'}}>Potatura</span>
-                  <div style={{fontSize:'0.8rem', opacity:0.7, marginTop:4}}>{fullScreenAnalysis.care.pruning}</div>
-               </div>
-               <div style={{background:'var(--white)', padding:16, borderRadius:20, border:'1px solid var(--card-border)'}}>
-                  <div className="settings-icon-box"><Layers size={18}/></div>
-                  <span style={{fontWeight:800, fontSize:'0.8rem', marginTop:8, display:'block'}}>Rinvaso</span>
-                  <div style={{fontSize:'0.8rem', opacity:0.7, marginTop:4}}>{fullScreenAnalysis.care.repotting}</div>
-               </div>
+            <div className="settings-section">
+              <div className="settings-section-title">Preferenze App</div>
+              <div className="settings-group">
+                <div className="settings-row" onClick={() => setDarkMode(!darkMode)}>
+                  <div className="settings-icon-box"><Moon size={18}/></div>
+                  <span style={{flex:1, fontWeight:600}}>Modalità Scura</span>
+                  <div className={`toggle-switch ${darkMode ? 'active' : ''}`}></div>
+                </div>
+                <div className="settings-row">
+                  <div className="settings-icon-box"><Bell size={18}/></div>
+                  <span style={{flex:1, fontWeight:600}}>Notifiche Cura</span>
+                  <div className="toggle-switch active"></div>
+                </div>
+              </div>
+            </div>
+
+            <div className="settings-section">
+              <div className="settings-section-title">Sicurezza & Dati</div>
+              <div className="settings-group">
+                <div className="settings-row" onClick={() => window.aistudio.openSelectKey()}>
+                  <div className="settings-icon-box"><Key size={18}/></div>
+                  <span style={{flex:1, fontWeight:600}}>Configura API Key</span>
+                  <ExternalLink size={16} opacity={0.3}/>
+                </div>
+                <div className="settings-row">
+                  <div className="settings-icon-box"><ShieldCheck size={18}/></div>
+                  <span style={{flex:1, fontWeight:600}}>Privacy e Sicurezza</span>
+                  <ChevronRight size={16} opacity={0.3}/>
+                </div>
+              </div>
+            </div>
+
+            <div className="settings-section">
+              <div className="settings-section-title">Sistema</div>
+              <div className="settings-group">
+                <div className="settings-row" style={{color: 'var(--danger)'}} onClick={() => { if(confirm("Cancellare tutti i dati?")) {localStorage.clear(); window.location.reload();} }}>
+                  <div className="settings-icon-box" style={{background:'#FFF0F0', color:'var(--danger)'}}><Trash2 size={18}/></div>
+                  <span style={{flex:1, fontWeight:600}}>Resetta Applicazione</span>
+                </div>
+                <div className="settings-row" onClick={() => alert("BioExpert v1.2.0")}>
+                  <div className="settings-icon-box"><Info size={18}/></div>
+                  <span style={{flex:1, fontWeight:600}}>Versione App</span>
+                  <span style={{fontSize:'0.8rem', opacity:0.4}}>1.2.0</span>
+                </div>
+              </div>
             </div>
           </div>
-          <div style={{padding: 16, borderTop:'1px solid var(--card-border)', display:'flex', gap:10}}>
-             <button className="btn-header-icon" style={{background:'var(--bg-warm)', border:'1px solid var(--card-border)', borderRadius:16, width:54, height:54}} onClick={() => { setFullScreenAnalysis(null); }}><Home size={24}/></button>
-             <button className="chat-deepen-prompt primary" style={{flex:1, height:54, borderRadius: 16}} onClick={() => { setFullScreenAnalysis(null); setActiveMode('chat'); sendMessage(`Approfondiamo: ${fullScreenAnalysis.name}`); }}>
-                <MessageSquare size={18}/> APPROFONDISCI IN CHAT AI
-             </button>
+        </div>
+      )}
+
+      {fullScreenAnalysis && (
+        <div className="side-overlay">
+          <header><button className="btn-header-icon" onClick={() => setFullScreenAnalysis(null)}><ChevronLeft size={24}/></button><h3>Dettagli & Cura</h3></header>
+          <div className="overlay-content">
+            <img src={fullScreenAnalysis.image} style={{width:'100%', borderRadius:32, marginBottom:24, boxShadow:'0 10px 30px rgba(0,0,0,0.1)'}} />
+            <div style={{display:'flex', justifyContent:'space-between', alignItems:'flex-start'}}>
+              <div>
+                <h2 style={{margin:0, fontSize:'1.8rem'}}>{fullScreenAnalysis.name}</h2>
+                <p style={{opacity:0.6, fontStyle:'italic', marginTop:4}}>{fullScreenAnalysis.scientificName}</p>
+              </div>
+              <div className={`status-badge ${fullScreenAnalysis.healthStatus === 'healthy' ? 'status-healthy' : 'status-sick'}`}>
+                {fullScreenAnalysis.healthStatus === 'healthy' ? 'Sana' : 'Malata'}
+              </div>
+            </div>
+            
+            <div style={{padding:20, background:'var(--white)', borderRadius:28, border:'1px solid var(--card-border)', marginTop:24}}>
+               <h4 style={{margin:'0 0 12px 0', display:'flex', alignItems:'center', gap:8}}><ShieldCheck size={18} color="var(--primary)"/> Diagnosi {fullScreenAnalysis.healthStatus === 'sick' ? 'e Problemi' : ''}</h4>
+               <p style={{fontSize:'0.95rem', lineHeight:1.6}}>{fullScreenAnalysis.diagnosis}</p>
+               
+               <h4 style={{margin:'24px 0 12px 0', display:'flex', alignItems:'center', gap:8}}><Heart size={18} color="var(--danger)"/> Guida alla Cura</h4>
+               <div className="care-grid">
+                  <div className="care-item">
+                    <div className="care-item-title"><Droplets size={16}/> Irrigazione</div>
+                    <div className="care-item-desc">{fullScreenAnalysis.care.watering}</div>
+                  </div>
+                  <div className="care-item">
+                    <div className="care-item-title"><Sun size={16}/> Esposizione</div>
+                    <div className="care-item-desc">{fullScreenAnalysis.care.general}</div>
+                  </div>
+                  <div className="care-item">
+                    <div className="care-item-title"><Scissors size={16}/> Potatura</div>
+                    <div className="care-item-desc">{fullScreenAnalysis.care.pruning}</div>
+                  </div>
+                  <div className="care-item">
+                    <div className="care-item-title"><Inbox size={16}/> Rinvaso</div>
+                    <div className="care-item-desc">{fullScreenAnalysis.care.repotting}</div>
+                  </div>
+               </div>
+            </div>
+            
+            <button className="btn-game-action" style={{marginTop:24, background:'var(--primary)', color:'white', width:'100%', padding:18, borderRadius:20, border:'none', fontWeight:800, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', gap:10}} onClick={() => { setFullScreenAnalysis(null); setActiveMode('chat'); sendMessage(`Qual è la cura migliore per questa ${fullScreenAnalysis.name}?`); }}>
+              <MessageSquare size={20}/> PARLA CON BIOEXPERT
+            </button>
           </div>
         </div>
       )}
