@@ -891,7 +891,7 @@ const styles = `
 
   @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
 
-  .overlay-content { flex: 1; overflow-y: auto; padding: 20px; scroll-behavior: smooth; }
+  .overlay-content { flex: 1; overflow-y: auto; padding: 20px; padding-bottom: 120px; scroll-behavior: smooth; }
 
   .shutter-layer {
     position: absolute;
@@ -3457,16 +3457,18 @@ function App() {
                 message: '🗑️ Vuoi davvero rimuovere questa pianta dal giardino?',
                 onConfirm: async () => {
                   try {
-                    if (fullScreenAnalysis.id) {
-                      await deleteUserPlant(fullScreenAnalysis.id);
-                      showToast('✅ Pianta rimossa dal giardino', 'success');
+                    if (fullScreenAnalysis.id && username) {
+                      await deleteUserPlant(username, fullScreenAnalysis.id);
+                      setAchievementToast('✅ Pianta rimossa dal giardino');
+                      setTimeout(() => setAchievementToast(null), 3000);
                       setFullScreenAnalysis(null);
                       // Refresh plant list
-                      const plants = await fetchUserPlants();
-                      setUserPlants(plants);
+                      const plants = await fetchUserPlants(username);
+                      setUserPlants(plants.data || []);
                     }
                   } catch (error) {
-                    showToast('❌ Errore durante la rimozione', 'error');
+                    setAchievementToast('❌ Errore durante la rimozione');
+                    setTimeout(() => setAchievementToast(null), 3000);
                   }
                   setConfirmToast(null);
                 },

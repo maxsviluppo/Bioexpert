@@ -1,3 +1,4 @@
+import type { VercelRequest, VercelResponse } from '@vercel/node';
 import pg from 'pg';
 import bcrypt from 'bcryptjs';
 
@@ -7,7 +8,7 @@ export const config = {
     runtime: 'nodejs',
 };
 
-export default async function handler(request, response) {
+export default async function handler(request: VercelRequest, response: VercelResponse) {
     const connectionString = process.env.NEON_DATABASE_URL || process.env.POSTGRES_URL;
     if (!connectionString) return response.status(500).json({ error: 'DB Config Missing' });
 
