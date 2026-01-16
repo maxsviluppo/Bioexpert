@@ -2,7 +2,7 @@
 import React, { useState, useRef, useEffect, useMemo, Component } from 'react';
 import { createRoot } from 'react-dom/client';
 import { GoogleGenAI, Type } from '@google/genai';
-import { Camera, Send, Sprout, Info, RefreshCw, MessageSquare, Droplets, AlertTriangle, CheckCircle2, Settings, Moon, Bell, Mountain, Sparkles, History, Share2, Trash2, Zap, ChevronLeft, Key, ExternalLink, Trophy, Target, Gamepad2, Upload, User, ShieldAlert, Clock, Leaf, Apple, Layers, Maximize2, Terminal, ChevronRight, Star, Award, Sun, CameraOff, HelpCircle, ShieldCheck, Heart, LogOut, Mail, Code, Scissors, Inbox, Download, X, Home, BookOpen, Plus, Calendar, Flower, Flower2, TreePine, FileText, Package, Image as ImageIcon } from 'lucide-react';
+import { Camera, Send, Sprout, Info, RefreshCw, MessageSquare, Droplets, AlertTriangle, CheckCircle2, Settings, Moon, Bell, Mountain, Sparkles, History, Share2, Trash2, Zap, ChevronLeft, Key, ExternalLink, Trophy, Target, Gamepad2, Upload, User, ShieldAlert, Clock, Leaf, Apple, Layers, Maximize2, Terminal, ChevronRight, Star, Award, Sun, CameraOff, HelpCircle, ShieldCheck, Heart, LogOut, Mail, Code, Scissors, Inbox, Download, X, Home, BookOpen, Plus, Calendar, Flower, Flower2, TreePine, FileText } from 'lucide-react';
 
 import {
   registerUsername,
@@ -17,7 +17,6 @@ import {
   deleteCareEvent,
   fetchPlantPhotos,
   addPlantPhoto,
-  deletePlantPhoto,
   deleteLeaderboardEntry,
   getLocalUsername,
   setLocalUsername,
@@ -111,7 +110,7 @@ const styles = `
     display: flex;
     flex-direction: column;
     position: relative;
-    background: linear-gradient(to bottom, #FFFFFF 0%, #FFFFFF 10%, #F5FBF5 30%, #E8F5E9 60%, #DCEDC8 85%, #C5E1A5 100%);
+    background: linear-gradient(to bottom, #FFFFFF, #F5FBF5, #E8F5E9, #DCEDC8, #C5E1A5);
     background-size: 100% 400%;
     animation: gradientShift 20s ease infinite;
     overflow: hidden;
@@ -594,22 +593,24 @@ const styles = `
 
   .main-frame {
     position: relative;
-    width: 100%;
+    width: calc(100% - 24px);
     flex: 1;
-    background: transparent; /* Fix per rimuovere cornice nera in dark mode */
-    border-radius: 0;
+    max-height: 60vh;
+    background: var(--white);
+    border-radius: 40px;
+    padding: 8px;
+    box-shadow: 0 12px 32px rgba(0,0,0,0.06);
+    border: 1px solid var(--card-border);
+    margin: 5px auto 0;
+    overflow: hidden;
     display: flex;
     flex-direction: column;
-    padding: 0;
-    box-shadow: none;
-    border: none;
-    margin: 0;
-    overflow: hidden;
   }
 
   @media (max-width: 480px) {
     .main-frame {
-      width: 100%;
+      max-height: 72vh; /* Più spazio su mobile per mostrare meglio il contenuto centrato */
+      width: calc(100% - 16px); /* Margini laterali leggermente più stretti su mobile */
     }
   }
 
@@ -617,9 +618,9 @@ const styles = `
     width: 100%;
     height: 100%;
     flex: 1;
-    border-radius: 0;
+    border-radius: 32px;
     overflow: hidden;
-    background: transparent;
+    background: #000;
     position: relative;
     display: flex;
     flex-direction: column;
@@ -1433,7 +1434,6 @@ function App() {
   const [isGeneratingPlan, setIsGeneratingPlan] = useState(false);
   const [itemToDelete, setItemToDelete] = useState<string | null>(null);
   const [plantPhotos, setPlantPhotos] = useState<any[]>([]);
-  const [selectedPhotoId, setSelectedPhotoId] = useState<string | null>(null);
   const [isLoadingPhotos, setIsLoadingPhotos] = useState(false);
   const [notificationsEnabled, setNotificationsEnabled] = useState(true); // New state for notifications
   const [lightLevel, setLightLevel] = useState<number | null>(null); // Lux value
@@ -2548,7 +2548,7 @@ function App() {
       const res = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
         contents: context + input,
-        config: { systemInstruction: "Sei BioExpert AI. Rispondi in Italiano con tono amichevole ma esperto. IMPORTANTE: Usa liste puntate (- punto) per elenchi. Usa il **grassetto** per concetti chiave. Sii ordinato e pulito. Se la pianta è malata, dividi la risposta in sezioni chiare." }
+        config: { systemInstruction: "Sei BioExpert AI. Rispondi brevemente e professionalmente in Italiano. Usa un tono amichevole ma esperto. Se la pianta è malata, sii molto specifico sulla cura." }
       });
       setMessages(prev => [...prev, { role: 'bot', text: res.text || "Errore risposta." }]);
       addXp(5);
@@ -2604,137 +2604,135 @@ function App() {
         </div>
       )}
 
-      {/* Palline Fluttuanti Sullo Sfondo */}
-      <div style={{ position: 'fixed', inset: 0, zIndex: 0, pointerEvents: 'none', overflow: 'hidden' }}>
-        {/* Pallina Verde Grande */}
-        <div style={{
-          position: 'absolute',
-          width: 120,
-          height: 120,
-          borderRadius: '50%',
-          background: 'radial-gradient(circle at 30% 30%, rgba(139, 195, 74, 0.3), rgba(139, 195, 74, 0.05))',
-          top: '15%',
-          left: '10%',
-          animation: 'float3d 20s ease-in-out infinite',
-          filter: 'blur(40px)'
-        }}></div>
-        {/* Pallina Gialla Media */}
-        <div style={{
-          position: 'absolute',
-          width: 80,
-          height: 80,
-          borderRadius: '50%',
-          background: 'radial-gradient(circle at 30% 30%, rgba(255, 235, 59, 0.25), rgba(255, 235, 59, 0.03))',
-          top: '60%',
-          right: '15%',
-          animation: 'float3dAlt 25s ease-in-out infinite 5s',
-          filter: 'blur(30px)'
-        }}></div>
-        {/* Pallina Verde Chiaro Piccola */}
-        <div style={{
-          position: 'absolute',
-          width: 60,
-          height: 60,
-          borderRadius: '50%',
-          background: 'radial-gradient(circle at 30% 30%, rgba(174, 213, 129, 0.35), rgba(174, 213, 129, 0.05))',
-          bottom: '25%',
-          left: '20%',
-          animation: 'float3dAlt2 18s ease-in-out infinite 10s',
-          filter: 'blur(25px)'
-        }}></div>
-        {/* Pallina Verde Scuro */}
-        <div style={{
-          position: 'absolute',
-          width: 100,
-          height: 100,
-          borderRadius: '50%',
-          background: 'radial-gradient(circle at 30% 30%, rgba(46, 125, 50, 0.2), rgba(46, 125, 50, 0.02))',
-          top: '40%',
-          right: '8%',
-          animation: 'float3dAlt3 22s ease-in-out infinite 3s',
-          filter: 'blur(35px)'
-        }}></div>
-        {/* Pallina Lime */}
-        <div style={{
-          position: 'absolute',
-          width: 70,
-          height: 70,
-          borderRadius: '50%',
-          background: 'radial-gradient(circle at 30% 30%, rgba(205, 220, 57, 0.3), rgba(205, 220, 57, 0.04))',
-          bottom: '15%',
-          right: '25%',
-          animation: 'float3d 28s ease-in-out infinite 7s',
-          filter: 'blur(28px)'
-        }}></div>
-      </div>
-
       <header style={{
-        background: 'transparent',
-        padding: '12px 16px',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        zIndex: 50,
-        position: 'relative'
+        background: 'linear-gradient(135deg, #2E7D32 0%, #1B5E20 100%)',
+        boxShadow: '0 4px 20px rgba(46, 125, 50, 0.25)',
+        borderBottom: '1px solid rgba(255,255,255,0.1)'
       }}>
         <div className="logo" onClick={() => { setActiveMode('scan'); setIsCameraOn(true); }} style={{
           cursor: 'pointer',
+          transition: 'transform 0.2s',
           display: 'flex',
           alignItems: 'center',
-          gap: 8
-        }}>
-          {/* Logo Minimal senza sfondo */}
-          <Sprout size={24} color="#2E7D32" strokeWidth={2.5} />
-          <h1 style={{
-            color: '#1B5E20',
-            margin: 0,
-            fontSize: '1.2rem',
-            fontWeight: 800,
-            letterSpacing: '-0.02em'
-          }}>BioExpert</h1>
+          gap: window.innerWidth <= 480 ? 6 : 12
+        }}
+          onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.02)'}
+          onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
+        >
+          <div style={{
+            background: 'rgba(255,255,255,0.2)',
+            borderRadius: '50%',
+            padding: window.innerWidth <= 480 ? 6 : 8,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            backdropFilter: 'blur(10px)'
+          }}>
+            <Sprout size={window.innerWidth <= 480 ? 20 : 24} color="white" />
+          </div>
+          <div>
+            <h1 style={{
+              color: 'white',
+              margin: 0,
+              fontSize: window.innerWidth <= 480 ? '1.05rem' : '1.3rem',
+              fontWeight: 900,
+              letterSpacing: '-0.02em',
+              textShadow: '0 2px 4px rgba(0,0,0,0.2)'
+            }}>BioExpert</h1>
+            <div style={{
+              height: window.innerWidth <= 480 ? 4 : 5,
+              background: 'rgba(255,255,255,0.2)',
+              borderRadius: 3,
+              overflow: 'hidden',
+              marginTop: window.innerWidth <= 480 ? 2 : 4,
+              width: window.innerWidth <= 480 ? 60 : 70,
+              boxShadow: 'inset 0 1px 3px rgba(0,0,0,0.2)'
+            }}>
+              <div style={{
+                height: '100%',
+                background: 'linear-gradient(90deg, #FFD700 0%, #FFA500 100%)',
+                width: `${((xp % 1000) / 1000) * 100}%`,
+                boxShadow: '0 0 8px rgba(255, 215, 0, 0.6)',
+                transition: 'width 0.3s ease'
+              }}></div>
+            </div>
+          </div>
         </div>
-
-        <div className="header-actions" style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+        <div className="header-actions" style={{ gap: window.innerWidth <= 480 ? 2 : 8 }}>
           <div className="badge-xp-large" style={{
-            background: '#FFD700',
+            background: 'linear-gradient(135deg, #FFD700 0%, #FFA500 100%)',
             color: '#333',
             fontWeight: 900,
-            padding: '4px 10px',
-            borderRadius: 16,
-            fontSize: '0.7rem',
-            boxShadow: '0 2px 6px rgba(255, 215, 0, 0.3)',
-            border: 'none',
-            marginRight: 2
+            padding: window.innerWidth <= 480 ? '5px 10px' : '8px 14px',
+            borderRadius: window.innerWidth <= 480 ? 10 : 12,
+            fontSize: window.innerWidth <= 480 ? '0.7rem' : '0.85rem',
+            boxShadow: '0 4px 12px rgba(255, 215, 0, 0.3)',
+            border: '2px solid rgba(255,255,255,0.3)'
           }}>LV.{level}</div>
-
-          {/* Pulsanti Circolari Minimal */}
-          {[
-            { icon: <Trophy size={16} />, action: () => setIsLeaderboardOpen(true) },
-            { icon: <History size={16} />, action: () => setIsHistoryOpen(true) },
-            { icon: <Gamepad2 size={16} />, action: () => setIsGamesOpen(true) },
-            { icon: <Settings size={16} />, action: () => setIsSettingsOpen(true) }
-          ].map((btn, i) => (
-            <button key={i} onClick={btn.action} style={{
-              width: 34,
-              height: 34,
-              borderRadius: '50%',
-              background: 'white',
-              border: '1px solid #A5D6A7',
-              color: '#2E7D32',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              cursor: 'pointer',
-              boxShadow: '0 2px 6px rgba(0,0,0,0.05)',
-              transition: 'all 0.2s',
-              padding: 0
+          <button className="btn-header-icon" onClick={() => setIsLeaderboardOpen(true)} aria-label="Classifica" style={{
+            background: 'rgba(255,255,255,0.15)',
+            backdropFilter: 'blur(10px)',
+            border: '1px solid rgba(255,255,255,0.2)',
+            color: 'white',
+            transition: 'all 0.2s'
+          }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = 'rgba(255,255,255,0.25)';
+              e.currentTarget.style.transform = 'translateY(-2px)';
             }}
-              onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.05)'}
-              onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
-            >
-              {btn.icon}
-            </button>
-          ))}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = 'rgba(255,255,255,0.15)';
+              e.currentTarget.style.transform = 'translateY(0)';
+            }}
+          ><Trophy size={window.innerWidth <= 480 ? 16 : 20} /></button>
+          <button className="btn-header-icon" onClick={() => setIsHistoryOpen(true)} aria-label="Erbario" style={{
+            background: 'rgba(255,255,255,0.15)',
+            backdropFilter: 'blur(10px)',
+            border: '1px solid rgba(255,255,255,0.2)',
+            color: 'white',
+            transition: 'all 0.2s'
+          }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = 'rgba(255,255,255,0.25)';
+              e.currentTarget.style.transform = 'translateY(-2px)';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = 'rgba(255,255,255,0.15)';
+              e.currentTarget.style.transform = 'translateY(0)';
+            }}
+          ><History size={window.innerWidth <= 480 ? 16 : 20} /></button>
+          <button className="btn-header-icon" onClick={() => setIsGamesOpen(true)} aria-label="Sfide" style={{
+            background: 'rgba(255,255,255,0.15)',
+            backdropFilter: 'blur(10px)',
+            border: '1px solid rgba(255,255,255,0.2)',
+            color: 'white',
+            transition: 'all 0.2s'
+          }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = 'rgba(255,255,255,0.25)';
+              e.currentTarget.style.transform = 'translateY(-2px)';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = 'rgba(255,255,255,0.15)';
+              e.currentTarget.style.transform = 'translateY(0)';
+            }}
+          ><Gamepad2 size={window.innerWidth <= 480 ? 16 : 20} /></button>
+          <button className="btn-header-icon" onClick={() => setIsSettingsOpen(true)} aria-label="Impostazioni" style={{
+            background: 'rgba(255,255,255,0.15)',
+            backdropFilter: 'blur(10px)',
+            border: '1px solid rgba(255,255,255,0.2)',
+            color: 'white',
+            transition: 'all 0.2s'
+          }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = 'rgba(255,255,255,0.25)';
+              e.currentTarget.style.transform = 'translateY(-2px)';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = 'rgba(255,255,255,0.15)';
+              e.currentTarget.style.transform = 'translateY(0)';
+            }}
+          ><Settings size={window.innerWidth <= 480 ? 16 : 20} /></button>
         </div>
       </header>
 
@@ -2771,7 +2769,7 @@ function App() {
                       scientificName: plant.scientific_name,
                       image: plant.image_url,
                       healthStatus: (plant.health_status || 'healthy') as 'healthy' | 'sick' | 'unknown',
-                      diagnosis: plant.diagnosis || 'Nessuna diagnosi disponibile',
+                      diagnosis: 'Vedi Piano Cura per dettagli',
                       carePlan: plant.notes,
                       care: {
                         watering: plant.watering_guide || 'Controlla il terreno regolarmente',
@@ -2857,7 +2855,7 @@ function App() {
               ) : capturedImg ? (
                 <div className="preview-container">
                   <img src={capturedImg} className="preview-image" />
-                  {!isAnalyzing && <button onClick={performAnalysis} style={{ position: 'absolute', bottom: 140, left: '50%', transform: 'translateX(-50%)', padding: '16px 32px', background: 'linear-gradient(135deg, #2E7D32 0%, #1B5E20 100%)', color: 'white', border: 'none', borderRadius: 100, fontWeight: 800, fontSize: '1rem', cursor: 'pointer', boxShadow: '0 8px 20px rgba(46, 125, 50, 0.4)', display: 'flex', alignItems: 'center', gap: 8, zIndex: 120 }}><Sparkles size={24} /> ANALIZZA ORA</button>}
+                  {!isAnalyzing && <button className="btn-analyze-toast" onClick={performAnalysis}><Sparkles size={24} /> ANALIZZA ORA</button>}
                   {isAnalyzing && <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', background: 'rgba(0,0,0,0.7)' }}><RefreshCw className="spin" size={40} /></div>}
                 </div>
               ) : isCameraOn ? (
@@ -2935,191 +2933,169 @@ function App() {
                     <div className="viewfinder-corner bl"></div>
                     <div className="viewfinder-corner br"></div>
                   </div>
-                  <div style={{ position: 'absolute', bottom: 140, left: 0, right: 0, display: 'flex', justifyContent: 'center', zIndex: 120 }}>
-                    <button onClick={capture} style={{ width: 80, height: 80, borderRadius: '50%', background: 'white', border: '6px solid rgba(255,255,255,0.3)', cursor: 'pointer', boxShadow: '0 4px 20px rgba(0,0,0,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                      <div style={{ width: 60, height: 60, borderRadius: '50%', background: 'white', border: '2px solid #333' }}></div>
-                    </button>
+                  <div className="shutter-layer">
+                    <button className="shutter-btn" onClick={capture}><div className="shutter-inner"></div></button>
                   </div>
                 </>
               ) : (
-                <div className="camera-off-overlay" style={{
-                  background: 'transparent',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  height: '100%',
-                  padding: 0,
-                  overflow: 'visible', /* Permette ombre */
-                  border: 'none',
-                  outline: 'none',
-                  boxShadow: 'none'
-                }}>
-                  {/* MAIN WHITE CARD CONTAINER - Home View */}
-                  <div className="home-main-card" style={{
-                    flex: 1,
+                <div className="camera-off-overlay camera-overlay-corners">
+                  <div className="logo-off-center">
+                    <Sprout size={80} />
+                    <h2>BIOEXPERT</h2>
+                  </div>
+
+                  <div className="viewfinder-box" style={{ margin: '32px 24px', padding: '20px', background: 'linear-gradient(135deg, #FFD700 0%, #FFA500 100%)', backdropFilter: 'blur(10px)', borderRadius: 24, border: '1px solid rgba(255,255,255,0.3)', textAlign: 'center', boxShadow: '0 8px 24px rgba(255, 165, 0, 0.3)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, marginBottom: 8, color: '#333', fontWeight: 800, fontSize: '0.8rem', textTransform: 'uppercase', letterSpacing: '0.05em', textShadow: '0 1px 2px rgba(255,255,255,0.5)' }}>
+                      <Sparkles size={14} /> Lo Sapevi Che?
+                    </div>
+                    <p style={{ margin: 0, fontSize: '0.9rem', lineHeight: 1.5, color: '#333', fontStyle: 'italic', fontWeight: 600 }}>
+                      "{currentTip}"
+                    </p>
+                  </div>
+
+                  <button
+                    onClick={() => setCurrentTip(BIO_TIPS[Math.floor(Math.random() * BIO_TIPS.length)])}
+                    style={{
+                      background: 'transparent',
+                      border: 'none',
+                      color: 'var(--text-muted)',
+                      marginTop: 8,
+                      cursor: 'pointer',
+                      fontSize: '0.8rem',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: 8,
+                      opacity: 0.6,
+                      transition: 'opacity 0.2s',
+                      fontWeight: 700,
+                      width: '100%'
+                    }}
+                    onMouseEnter={(e) => e.currentTarget.style.opacity = '1'}
+                    onMouseLeave={(e) => e.currentTarget.style.opacity = '0.6'}
+                  >
+                    <RefreshCw size={14} /> Altra curiosità
+                  </button>
+
+
+                  {/* Container Pulsanti */}
+                  <div style={{
                     display: 'flex',
-                    flexDirection: 'column',
-                    background: 'white',
-                    borderRadius: 48,
-                    margin: '0 15px',
-                    padding: '20px 24px',
-                    position: 'relative',
-                    boxShadow: '0 15px 40px rgba(0, 0, 0, 0.08)',
-                    overflow: 'auto',
-                    maxHeight: 'calc(100vh - 220px)',
-                    marginBottom: 0,
-                    border: 'none',
-                    outline: 'none'
+                    gap: 24,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    marginTop: 40,
+                    marginBottom: 40
                   }}>
-                    {/* Background Texture Topografica */}
-                    <div style={{ position: 'absolute', inset: 0, opacity: 0.04, pointerEvents: 'none', zIndex: 0 }}>
-                      <svg width="100%" height="100%" viewBox="0 0 400 600" preserveAspectRatio="none">
-                        <path d="M0,100 Q100,50 200,100 T400,100" fill="none" stroke="#2E7D32" strokeWidth="2" />
-                        <path d="M0,200 Q150,150 250,200 T400,180" fill="none" stroke="#2E7D32" strokeWidth="2" />
-                        <path d="M400,300 Q250,350 100,300 T0,350" fill="none" stroke="#2E7D32" strokeWidth="2" />
-                        <path d="M400,500 Q200,450 100,550 T0,500" fill="none" stroke="#2E7D32" strokeWidth="2" />
-                        <path d="M200,0 Q250,100 200,200" fill="none" stroke="#2E7D32" strokeWidth="2" />
-                      </svg>
-                    </div>
-
-                    {/* Palline Decorative Verdi Sfumate */}
-                    <div style={{ position: 'absolute', width: 80, height: 80, borderRadius: '50%', background: 'radial-gradient(circle, rgba(139, 195, 74, 0.4) 0%, rgba(139, 195, 74, 0) 70%)', top: '45%', right: '5%', zIndex: 1, filter: 'blur(20px)' }}></div>
-                    <div style={{ position: 'absolute', width: 60, height: 60, borderRadius: '50%', background: 'radial-gradient(circle, rgba(139, 195, 74, 0.3) 0%, rgba(139, 195, 74, 0) 70%)', bottom: '35%', left: '8%', zIndex: 1, filter: 'blur(15px)' }}></div>
-                    <div style={{ position: 'absolute', width: 40, height: 40, borderRadius: '50%', background: 'radial-gradient(circle, rgba(255, 235, 59, 0.5) 0%, rgba(255, 235, 59, 0) 70%)', top: '65%', left: '5%', zIndex: 1, filter: 'blur(10px)' }}></div>
-
-                    {/* Mirino Curvo Top-Left - Ridotto per mobile */}
-                    <svg width="40" height="40" viewBox="0 0 60 60" style={{ position: 'absolute', top: 20, left: 20, zIndex: 10 }}>
-                      <path d="M 5 55 Q 5 5 55 5" fill="none" stroke="#2E7D32" strokeWidth="4" strokeLinecap="round" />
-                    </svg>
-
-                    {/* Mirino Curvo Bottom-Right - Ridotto per mobile */}
-                    <svg width="40" height="40" viewBox="0 0 60 60" style={{ position: 'absolute', bottom: 20, right: 20, zIndex: 10 }}>
-                      <path d="M 55 5 Q 55 55 5 55" fill="none" stroke="#2E7D32" strokeWidth="4" strokeLinecap="round" />
-                    </svg>
-
-
-                    {/* Logo Centrale con Icona Foglia */}
-                    <div style={{ marginTop: 50, textAlign: 'center', marginBottom: 20, zIndex: 2 }}>
-                      {/* Icona Foglia Stilizzata (Simile a immagine) */}
-                      <div style={{ display: 'inline-block', marginBottom: 10 }}>
-                        <Sprout size={72} color="#33691E" strokeWidth={2.5} />
-                      </div>
-                      <h1 style={{ margin: 0, color: '#1B5E20', fontSize: '2.4rem', letterSpacing: '-0.03em', fontWeight: 800, fontFamily: 'sans-serif' }}>BIOEXPERT</h1>
-                    </div>
-
-                    {/* Box Curiosità Beige (Floating) */}
-                    <div style={{
-                      background: 'linear-gradient(135deg, #FFF8E1 0%, #FFECB3 100%)',
-                      borderRadius: 24,
-                      padding: '24px 20px',
-                      position: 'relative',
-                      marginBottom: 20,
-                      boxShadow: '0 15px 35px rgba(255, 236, 179, 0.8), 0 5px 15px rgba(255, 160, 0, 0.1)', /* Ombra calda */
-                      zIndex: 2,
-                      border: 'none', /* RIMOSSO BORDO BIANCO */
-                      outline: 'none'
-                    }}>
-                      {/* Decorazione Orchidea Outline (Left) */}
-                      <div style={{ position: 'absolute', left: -10, bottom: -10, opacity: 0.15, transform: 'rotate(-10deg)' }}>
-                        <Flower2 size={100} color="#E65100" strokeWidth={0.8} />
-                      </div>
-                      {/* Decorazione Ape Outline (Right) */}
-                      <div style={{ position: 'absolute', right: 5, top: 5, opacity: 0.2 }}>
-                        <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#E65100" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M8 12a4 4 0 1 1 8 0" /><path d="M12 7V3" /><path d="M9 4.5 10.5 6" /><path d="M15 4.5 13.5 6" /><path d="M20 12h-2" /><path d="M6 12H4" /><path d="M4 16c1 .5 2 .5 2 0" /><path d="M20 16c-1 .5-2 .5-2 0" /></svg>
-                      </div>
-
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, marginBottom: 8, color: '#333', fontWeight: 900, fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
-                        <Sparkles size={14} fill="#333" /> LO SAPEVI CHE?
-                      </div>
-                      <p style={{ margin: 0, fontSize: '1rem', lineHeight: 1.4, color: '#3E2723', fontStyle: 'italic', fontWeight: 600, textAlign: 'center', fontFamily: 'serif' }}>
-                        "{currentTip}"
-                      </p>
-                    </div>
-
-                    {/* Refresh Button (Pillola Bianca Pulita) */}
+                    {/* Pulsante Fotocamera - Tondo */}
                     <button
-                      onClick={() => setCurrentTip(BIO_TIPS[Math.floor(Math.random() * BIO_TIPS.length)])}
+                      onClick={() => setIsCameraOn(true)}
                       style={{
-                        margin: '0 auto',
-                        background: 'white',
-                        border: '1px solid #A5D6A7',
-                        color: '#2E7D32',
-                        padding: '10px 24px',
-                        borderRadius: 100,
+                        width: 140,
+                        height: 140,
+                        borderRadius: '50%',
+                        background: 'linear-gradient(135deg, rgba(46, 125, 50, 0.9) 0%, rgba(27, 94, 32, 0.95) 100%)',
+                        backdropFilter: 'blur(20px) saturate(180%)',
+                        WebkitBackdropFilter: 'blur(20px) saturate(180%)',
+                        color: 'white',
+                        border: '2px solid rgba(255,255,255,0.3)',
                         cursor: 'pointer',
-                        fontSize: '0.8rem',
+                        boxShadow: '0 12px 40px rgba(46, 125, 50, 0.4), 0 0 0 1px rgba(255,255,255,0.1), inset 0 1px 0 rgba(255,255,255,0.3)',
                         display: 'flex',
                         alignItems: 'center',
-                        gap: 8,
-                        fontWeight: 700,
-                        boxShadow: '0 4px 12px rgba(46, 125, 50, 0.1)', /* Ombra verde */
-                        transition: 'all 0.2s',
-                        zIndex: 2,
-                        marginBottom: 'auto', /* Spinge i bottoni in fondo alla card */
-                        outline: 'none'
+                        justifyContent: 'center',
+                        transition: 'all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1)',
+                        position: 'relative'
                       }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.transform = 'translateY(-4px) scale(1.05)';
+                        e.currentTarget.style.boxShadow = '0 12px 32px rgba(46, 125, 50, 0.45)';
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.transform = 'translateY(0) scale(1)';
+                        e.currentTarget.style.boxShadow = '0 8px 24px rgba(46, 125, 50, 0.35)';
+                      }}
+                      onMouseDown={(e) => e.currentTarget.style.transform = 'scale(0.95)'}
+                      onMouseUp={(e) => e.currentTarget.style.transform = 'translateY(-4px) scale(1.05)'}
+                      aria-label="Attiva Fotocamera"
                     >
-                      <RefreshCw size={14} /> Altra curiosità
+                      {/* Riflesso stile icona app */}
+                      <div style={{
+                        position: 'absolute',
+                        top: 0,
+                        left: 0,
+                        right: 0,
+                        height: '50%',
+                        background: 'linear-gradient(180deg, rgba(255,255,255,0.4) 0%, rgba(255,255,255,0) 100%)',
+                        borderRadius: '50% 50% 100% 100%',
+                        pointerEvents: 'none'
+                      }}></div>
+                      <Camera size={64} strokeWidth={2.5} />
                     </button>
 
-                    {/* GLOSSY ACTION BUTTONS */}
-                    <div style={{
-                      marginTop: 20,
-                      display: 'flex',
-                      gap: 24,
-                      justifyContent: 'center',
-                      alignItems: 'center',
-                      paddingBottom: 100,
-                      zIndex: 2
-                    }}>
-                      {/* Camera Button: GLOSSY DEEP GREEN */}
-                      <button
-                        onClick={() => setIsCameraOn(true)}
-                        style={{
-                          width: 140,
-                          height: 140,
-                          borderRadius: '50%',
-                          /* Gradiente complesso per effetto sferico/glossy */
-                          background: 'radial-gradient(circle at 30% 30%, rgba(255,255,255,0.25) 0%, rgba(255,255,255,0) 40%), linear-gradient(145deg, #2E7D32 0%, #1B5E20 100%)',
-                          border: 'none',
-                          outline: 'none',
-                          color: 'white',
-                          boxShadow: '0 20px 40px rgba(27, 94, 32, 0.4), inset 0 2px 4px rgba(255,255,255,0.3)',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          cursor: 'pointer',
-                          position: 'relative',
-                          overflow: 'hidden'
-                        }}
-                      >
-                        <Camera size={64} strokeWidth={2.5} />
-                      </button>
-
-                      {/* Gallery Button: GLOSSY LIME/YELLOW */}
+                    {/* Pulsante Galleria - Tondo */}
+                    {!activeGame ? (
                       <button
                         onClick={() => fileInputRef.current?.click()}
                         style={{
                           width: 140,
                           height: 140,
                           borderRadius: '50%',
-                          /* Gradiente Giallo/Lime Glossy */
-                          background: 'radial-gradient(circle at 30% 30%, rgba(255,255,255,0.6) 0%, rgba(255,255,255,0) 40%), linear-gradient(145deg, #E6EE9C 0%, #9CCC65 100%)',
-                          border: 'none',
-                          outline: 'none',
-                          color: '#1B5E20', /* Icona Verde Scuro su sfondo chiaro */
-                          boxShadow: '0 20px 40px rgba(139, 195, 74, 0.4), inset 0 2px 4px rgba(255,255,255,0.8)',
+                          background: 'rgba(255,255,255,0.85)',
+                          backdropFilter: 'blur(20px) saturate(180%)',
+                          WebkitBackdropFilter: 'blur(20px) saturate(180%)',
+                          color: 'var(--primary)',
+                          border: '3px solid rgba(46, 125, 50, 0.3)',
+                          cursor: 'pointer',
+                          boxShadow: '0 12px 40px rgba(0,0,0,0.15), 0 0 0 1px rgba(255,255,255,0.5), inset 0 1px 0 rgba(255,255,255,0.8)',
                           display: 'flex',
                           alignItems: 'center',
                           justifyContent: 'center',
-                          cursor: 'pointer',
-                          position: 'relative',
-                          overflow: 'hidden'
+                          transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                          position: 'relative'
                         }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.background = 'linear-gradient(135deg, #2E7D32 0%, #1B5E20 100%)';
+                          e.currentTarget.style.color = 'white';
+                          e.currentTarget.style.borderColor = 'transparent';
+                          e.currentTarget.style.transform = 'translateY(-4px) scale(1.05)';
+                          e.currentTarget.style.boxShadow = '0 12px 32px rgba(46, 125, 50, 0.35)';
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.background = 'rgba(255,255,255,0.95)';
+                          e.currentTarget.style.color = 'var(--primary)';
+                          e.currentTarget.style.borderColor = 'var(--primary)';
+                          e.currentTarget.style.transform = 'translateY(0) scale(1)';
+                          e.currentTarget.style.boxShadow = '0 4px 16px rgba(0,0,0,0.1)';
+                        }}
+                        onMouseDown={(e) => e.currentTarget.style.transform = 'scale(0.95)'}
+                        onMouseUp={(e) => e.currentTarget.style.transform = 'translateY(-4px) scale(1.05)'}
+                        aria-label="Carica da Galleria"
                       >
-                        <Upload size={64} strokeWidth={2.5} />
+                        <Upload size={40} strokeWidth={2} />
                       </button>
-                    </div>
+                    ) : (
+                      <div style={{
+                        width: 88,
+                        height: 88,
+                        borderRadius: '50%',
+                        background: 'rgba(245,245,245,0.9)',
+                        backdropFilter: 'blur(10px)',
+                        color: 'var(--text-muted)',
+                        border: '3px dashed rgba(0,0,0,0.1)',
+                        boxShadow: '0 4px 16px rgba(0,0,0,0.05)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        opacity: 0.5
+                      }}>
+                        <Upload size={40} strokeWidth={2} />
+                      </div>
+                    )}
                   </div>
+
+
+
                 </div>
               )}
             </div>
@@ -3167,38 +3143,7 @@ function App() {
                     )}
                   </div>
                 ) : (
-                  <div key={i} className={`msg msg-${m.role}`}>
-                    {m.role === 'bot' ? (
-                      <div style={{ lineHeight: '1.5', fontSize: '0.95rem' }}>
-                        {m.text?.split('\n').map((line, idx) => {
-                          // Gestione base liste e grassetto
-                          if (line.trim().startsWith('- ')) {
-                            return (
-                              <div key={idx} style={{ display: 'flex', gap: 6, marginBottom: 4, marginLeft: 8 }}>
-                                <span style={{ color: '#2E7D32', fontWeight: 'bold' }}>•</span>
-                                <div>
-                                  {line.substring(2).split(/(\*\*.*?\*\*)/).map((part, pIdx) =>
-                                    part.startsWith('**') && part.endsWith('**') ?
-                                      <strong key={pIdx} style={{ color: '#1B5E20' }}>{part.slice(2, -2)}</strong> : part
-                                  )}
-                                </div>
-                              </div>
-                            );
-                          }
-                          return (
-                            <div key={idx} style={{ marginBottom: line.trim() ? 8 : 0 }}>
-                              {line.split(/(\*\*.*?\*\*)/).map((part, pIdx) =>
-                                part.startsWith('**') && part.endsWith('**') ?
-                                  <strong key={pIdx} style={{ color: '#1B5E20' }}>{part.slice(2, -2)}</strong> : part
-                              )}
-                            </div>
-                          );
-                        })}
-                      </div>
-                    ) : (
-                      m.text
-                    )}
-                  </div>
+                  <div key={i} className={`msg msg-${m.role}`}>{m.text}</div>
                 )
               ))}
               {isChatLoading && <div className="msg msg-bot" style={{ opacity: 0.5 }}><RefreshCw size={14} className="spin" /> Sto pensando...</div>}
@@ -3206,378 +3151,50 @@ function App() {
           )}
         </div>
 
-        {
-          activeMode === 'chat' && (
-            <>
-              <div className="quick-replies-container">
-                {quickReplies.map((q, idx) => (
-                  <button key={idx} className="quick-reply-chip" onClick={() => sendMessage(q)}>
-                    <HelpCircle size={14} /> {q}
-                  </button>
-                ))}
-              </div>
-              <div className="chat-input-row" style={{ marginBottom: 120 }}>
-                <input className="input-field" placeholder="Chiedi a BioExpert..." value={chatInput} onChange={e => setChatInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && sendMessage()} />
-                <button className="btn-header-icon" style={{ background: 'var(--primary)', color: 'white', width: 44, height: 44 }} onClick={() => sendMessage()}><Send size={18} /></button>
-              </div>
-            </>
-          )
-        }
-      </div >
-
-      {/* PLANT DETAIL PAGE - Full Screen Modal */}
-      {fullScreenAnalysis && (
-        <div style={{
-          position: 'fixed',
-          inset: 0,
-          background: 'white',
-          zIndex: 2000,
-          overflow: 'auto',
-          display: 'flex',
-          flexDirection: 'column'
-        }}>
-          {/* Header Verde */}
-          <div style={{
-            background: 'linear-gradient(135deg, #2E7D32 0%, #1B5E20 100%)',
-            padding: '16px 20px',
-            color: 'white',
-            display: 'flex',
-            alignItems: 'center',
-            gap: 12
-          }}>
-            <button onClick={() => setFullScreenAnalysis(null)} style={{
-              background: 'rgba(255,255,255,0.2)',
-              border: 'none',
-              borderRadius: '50%',
-              width: 40,
-              height: 40,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              cursor: 'pointer',
-              color: 'white'
-            }}>
-              <ChevronLeft size={24} />
-            </button>
-            <div style={{ flex: 1 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                <Sprout size={24} />
-                <h2 style={{ margin: 0, fontSize: '1.3rem', fontWeight: 800 }}>{fullScreenAnalysis.name}</h2>
-              </div>
-              <div style={{ fontSize: '0.85rem', opacity: 0.9, fontStyle: 'italic' }}>{fullScreenAnalysis.scientificName}</div>
+        {activeMode === 'chat' && (
+          <>
+            <div className="quick-replies-container">
+              {quickReplies.map((q, idx) => (
+                <button key={idx} className="quick-reply-chip" onClick={() => sendMessage(q)}>
+                  <HelpCircle size={14} /> {q}
+                </button>
+              ))}
             </div>
-            {/* Campanella Notifiche */}
-            <button onClick={() => {
-              setNotificationsEnabled(!notificationsEnabled);
-            }} style={{
-              background: notificationsEnabled ? 'rgba(255, 215, 0, 0.3)' : 'rgba(255,255,255,0.2)',
-              border: 'none',
-              borderRadius: '50%',
-              width: 40,
-              height: 40,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              cursor: 'pointer',
-              color: notificationsEnabled ? '#FFD700' : 'white'
-            }}>
-              <Bell size={20} />
-            </button>
-          </div>
-
-          {/* Foto Pianta */}
-          <div style={{ position: 'relative', height: 300, background: '#f5f5f5' }}>
-            <img
-              src={fullScreenAnalysis.image || 'https://placehold.co/600x400?text=Pianta'}
-              style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-            />
-            <div style={{
-              position: 'absolute',
-              top: 16,
-              right: 16,
-              background: fullScreenAnalysis.healthStatus === 'sick' ? '#ffebee' : '#e8f5e9',
-              padding: '8px 16px',
-              borderRadius: 20,
-              fontSize: '0.8rem',
-              fontWeight: 800,
-              color: fullScreenAnalysis.healthStatus === 'sick' ? '#d32f2f' : '#2e7d32',
-              boxShadow: '0 4px 12px rgba(0,0,0,0.1)'
-            }}>
-              {fullScreenAnalysis.healthStatus === 'sick' ? 'MALATA' : 'SANA'}
+            <div className="chat-input-row">
+              <input className="input-field" placeholder="Chiedi a BioExpert..." value={chatInput} onChange={e => setChatInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && sendMessage()} />
+              <button className="btn-header-icon" style={{ background: 'var(--primary)', color: 'white', width: 44, height: 44 }} onClick={() => sendMessage()}><Send size={18} /></button>
             </div>
-          </div>
+          </>
+        )}
+      </div>
 
-          {/* Tab Navigation */}
-          <div style={{
-            display: 'flex',
-            gap: 8,
-            padding: '16px 20px',
-            borderBottom: '1px solid #e0e0e0'
-          }}>
-            {['INFO', 'CURA'].map((tab) => (
-              <button
-                key={tab}
-                onClick={() => setDetailTab(tab.toLowerCase() as any)}
-                style={{
-                  flex: 1,
-                  padding: '12px',
-                  background: detailTab === tab.toLowerCase() ? '#2E7D32' : 'transparent',
-                  color: detailTab === tab.toLowerCase() ? 'white' : '#666',
-                  border: detailTab === tab.toLowerCase() ? 'none' : '1px solid #e0e0e0',
-                  borderRadius: 12,
-                  fontWeight: 800,
-                  fontSize: '0.85rem',
-                  cursor: 'pointer',
-                  transition: 'all 0.2s'
-                }}
-              >
-                {tab}
-              </button>
-            ))}
-          </div>
-
-          {/* Content Area */}
-          <div style={{ flex: 1, padding: '20px', paddingBottom: 20, overflow: 'auto' }}>
-            {detailTab === 'info' && (
-              <>
-                {/* Diagnosi */}
-                <div style={{ marginBottom: 24 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12, color: '#2E7D32' }}>
-                    <ShieldCheck size={20} />
-                    <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 800 }}>Diagnosi</h3>
-                  </div>
-                  <p style={{ margin: 0, color: '#666', lineHeight: 1.6 }}>{fullScreenAnalysis.diagnosis}</p>
-                </div>
-
-                {/* Consigli Rapidi */}
-                <div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16, color: '#d32f2f' }}>
-                    <Heart size={20} />
-                    <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 800 }}>Consigli Rapidi</h3>
-                  </div>
-
-                  {/* Irrigazione */}
-                  <div style={{
-                    background: 'linear-gradient(135deg, #E8F5E9 0%, #C8E6C9 100%)',
-                    borderRadius: 16,
-                    padding: '16px',
-                    marginBottom: 12
-                  }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, color: '#1B5E20' }}>
-                      <Droplets size={18} />
-                      <strong style={{ fontSize: '0.9rem' }}>Irrigazione</strong>
-                    </div>
-                    <p style={{ margin: 0, fontSize: '0.85rem', color: '#2E7D32' }}>{fullScreenAnalysis.care?.watering}</p>
-                  </div>
-
-                  {/* Esposizione */}
-                  <div style={{
-                    background: 'linear-gradient(135deg, #FFF8E1 0%, #FFECB3 100%)',
-                    borderRadius: 16,
-                    padding: '16px',
-                    marginBottom: 12
-                  }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, color: '#E65100' }}>
-                      <Sun size={18} />
-                      <strong style={{ fontSize: '0.9rem' }}>Esposizione</strong>
-                    </div>
-                    <p style={{ margin: 0, fontSize: '0.85rem', color: '#F57C00' }}>{fullScreenAnalysis.care?.general}</p>
-                  </div>
-
-                  {/* Potatura */}
-                  <div style={{
-                    background: 'linear-gradient(135deg, #E8F5E9 0%, #C8E6C9 100%)',
-                    borderRadius: 16,
-                    padding: '16px',
-                    marginBottom: 12
-                  }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, color: '#1B5E20' }}>
-                      <Scissors size={18} />
-                      <strong style={{ fontSize: '0.9rem' }}>Potatura</strong>
-                    </div>
-                    <p style={{ margin: 0, fontSize: '0.85rem', color: '#2E7D32' }}>{fullScreenAnalysis.care?.pruning}</p>
-                  </div>
-
-                  {/* Rinvaso */}
-                  <div style={{
-                    background: 'linear-gradient(135deg, #E8F5E9 0%, #C8E6C9 100%)',
-                    borderRadius: 16,
-                    padding: '16px'
-                  }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, color: '#1B5E20' }}>
-                      <Package size={18} />
-                      <strong style={{ fontSize: '0.9rem' }}>Rinvaso</strong>
-                    </div>
-                    <p style={{ margin: 0, fontSize: '0.85rem', color: '#2E7D32' }}>{fullScreenAnalysis.care?.repotting}</p>
-                  </div>
-
-                  {/* Luxometro */}
-                  {lightLevel !== null && (
-                    <div style={{
-                      background: 'linear-gradient(135deg, #FFF8E1 0%, #FFECB3 100%)',
-                      borderRadius: 16,
-                      padding: '16px',
-                      marginTop: 12
-                    }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, color: '#E65100' }}>
-                        <Sun size={18} />
-                        <strong style={{ fontSize: '0.9rem' }}>Luce Ambiente</strong>
-                      </div>
-                      <p style={{ margin: 0, fontSize: '1.2rem', fontWeight: 800, color: '#F57C00' }}>
-                        {lightLevel.toFixed(0)} lux
-                      </p>
-                      <p style={{ margin: '4px 0 0 0', fontSize: '0.75rem', color: '#666' }}>
-                        {lightLevel < 100 ? '🌑 Molto buio' : lightLevel < 500 ? '🌙 Ombra' : lightLevel < 1000 ? '☁️ Luce indiretta' : lightLevel < 5000 ? '⛅ Luminoso' : '☀️ Pieno sole'}
-                      </p>
-                    </div>
-                  )}
-                </div>
-              </>
-            )}
-
-            {detailTab === 'cura' && (
-              <div style={{ textAlign: 'center', padding: 40, color: '#999' }}>
-                <Calendar size={48} style={{ opacity: 0.3, marginBottom: 16 }} />
-                <p>Piano di cura in arrivo...</p>
-              </div>
-            )}
-
-            {detailTab === 'album' && (
-              <div style={{ textAlign: 'center', padding: 40, color: '#999' }}>
-                <ImageIcon size={48} style={{ opacity: 0.3, marginBottom: 16 }} />
-                <p>Album foto in arrivo...</p>
-              </div>
-            )}
-          </div>
-
-          {/* Pulsante RIMUOVI Fluttuante */}
-          <button
-            onClick={() => {
-              setConfirmToast({
-                message: '🗑️ Vuoi davvero rimuovere questa pianta dal giardino?',
-                onConfirm: async () => {
-                  try {
-                    if (fullScreenAnalysis.id) {
-                      await deleteUserPlant(fullScreenAnalysis.id);
-                      showToast('✅ Pianta rimossa dal giardino', 'success');
-                      setFullScreenAnalysis(null);
-                      // Refresh plant list
-                      const plants = await fetchUserPlants();
-                      setUserPlants(plants);
-                    }
-                  } catch (error) {
-                    showToast('❌ Errore durante la rimozione', 'error');
-                  }
-                  setConfirmToast(null);
-                },
-                onCancel: () => setConfirmToast(null)
-              });
-            }}
-            style={{
-              position: 'fixed',
-              bottom: 120,
-              right: 20,
-              width: 60,
-              height: 60,
-              borderRadius: '50%',
-              background: 'linear-gradient(135deg, #EF5350 0%, #E53935 100%)',
-              color: 'white',
-              border: 'none',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              cursor: 'pointer',
-              boxShadow: '0 6px 20px rgba(244, 67, 54, 0.4)',
-              zIndex: 2001,
-              transition: 'all 0.3s'
-            }}
-          >
-            <Trash2 size={24} />
-          </button>
-        </div>
-      )}
-
-      {/* BOTTOM NAVIGATION BAR (Fixed Dock) */}
-      < div style={{
-        position: 'fixed',
-        bottom: 20,
-        left: 20,
-        right: 20,
-        height: 80,
-        background: 'rgba(255,255,255,0.9)',
-        backdropFilter: 'blur(20px)',
-        borderRadius: 24,
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-around',
-        boxShadow: '0 10px 30px rgba(0,0,0,0.1)',
-        zIndex: 1000,
-        border: '1px solid rgba(255,255,255,0.5)'
-      }
-      }>
-        {/* HOME Button */}
-        < button
-          onClick={() => { setActiveMode('scan'); setIsCameraOn(false); }}
-          style={{
-            background: 'transparent',
-            border: 'none',
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            gap: 6,
-            padding: 10,
-            cursor: 'pointer',
-            opacity: activeMode === 'scan' ? 1 : 0.5,
-            transform: activeMode === 'scan' ? 'translateY(-2px)' : 'none',
-            transition: 'all 0.2s'
-          }}
-        >
-          <Home size={28} color="#1B5E20" strokeWidth={activeMode === 'scan' ? 2.5 : 2} />
-          <span style={{ fontSize: 10, fontWeight: 800, color: '#1B5E20' }}>HOME</span>
-        </button >
-
-        {/* GARDEN Button */}
-        < button
-          onClick={() => setActiveMode('garden')}
-          style={{
-            background: 'transparent',
-            border: 'none',
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            gap: 6,
-            padding: 10,
-            cursor: 'pointer',
-            opacity: activeMode === 'garden' ? 1 : 0.5,
-            transform: activeMode === 'garden' ? 'translateY(-2px)' : 'none',
-            transition: 'all 0.2s'
-          }}
-        >
-          <Sprout size={28} color="#1B5E20" strokeWidth={activeMode === 'garden' ? 2.5 : 2} />
-          <span style={{ fontSize: 10, fontWeight: 800, color: '#1B5E20' }}>GIARDINO</span>
-        </button >
-
-        {/* CHAT Button */}
-        < button
-          onClick={() => setActiveMode('chat')}
-          style={{
-            background: 'transparent',
-            border: 'none',
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            gap: 6,
-            padding: 10,
-            cursor: 'pointer',
-            opacity: activeMode === 'chat' ? 1 : 0.5,
-            transform: activeMode === 'chat' ? 'translateY(-2px)' : 'none',
-            transition: 'all 0.2s'
-          }}
-        >
-          <MessageSquare size={28} color="#1B5E20" strokeWidth={activeMode === 'chat' ? 2.5 : 2} />
-          <span style={{ fontSize: 10, fontWeight: 800, color: '#1B5E20' }}>CHAT</span>
-        </button >
-      </div >
+      <div className="action-dashboard" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10, padding: '10px 10px 40px 10px' }}>
+        <button className="btn-3d" onClick={() => {
+          if (activeMode === 'scan' && isCameraOn) {
+            setIsCameraOn(false);
+          } else {
+            setActiveMode('scan');
+            setIsCameraOn(false);
+          }
+        }} style={{ flexDirection: 'column', gap: 4, height: 'auto', padding: 10, background: activeMode === 'scan' ? 'var(--white)' : '#f0f0f0' }}>
+          {activeMode === 'scan' && isCameraOn ? (
+            <CameraOff size={24} color="var(--danger)" />
+          ) : (
+            <Home size={24} color={activeMode === 'scan' ? 'var(--primary)' : '#999'} />
+          )}
+          <span style={{ fontSize: '0.7rem', color: activeMode === 'scan' && isCameraOn ? 'var(--danger)' : activeMode === 'scan' ? 'var(--primary)' : '#999' }}>
+            {activeMode === 'scan' && isCameraOn ? 'STOP' : 'HOME'}
+          </span>
+        </button>
+        <button className="btn-3d" onClick={() => setActiveMode('garden')} style={{ flexDirection: 'column', gap: 4, height: 'auto', padding: 10, background: activeMode === 'garden' ? 'var(--white)' : '#f0f0f0' }}>
+          <Sprout size={24} color={activeMode === 'garden' ? 'var(--primary)' : '#999'} />
+          <span style={{ fontSize: '0.7rem', color: activeMode === 'garden' ? 'var(--primary)' : '#999' }}>GIARDINO</span>
+        </button>
+        <button className="btn-3d" onClick={() => setActiveMode('chat')} style={{ flexDirection: 'column', gap: 4, height: 'auto', padding: 10, background: activeMode === 'chat' ? 'var(--white)' : '#f0f0f0' }}>
+          <MessageSquare size={24} color={activeMode === 'chat' ? 'var(--primary)' : '#999'} />
+          <span style={{ fontSize: '0.7rem', color: activeMode === 'chat' ? 'var(--primary)' : '#999' }}>CHAT</span>
+        </button>
+      </div>
 
       <input type="file" ref={fileInputRef} hidden accept="image/*" onChange={handleFileUpload} />
 
@@ -4823,73 +4440,20 @@ function App() {
                 <div style={{ padding: 20, background: 'var(--white)', borderRadius: 28, border: '1px solid var(--card-border)' }}>
                   <h3 style={{ marginTop: 0, fontSize: '1rem', display: 'flex', alignItems: 'center', gap: 8 }}><History size={18} color="var(--primary)" /> Evoluzione Pianta</h3>
                   <p style={{ fontSize: '0.75rem', opacity: 0.6, marginBottom: 16 }}>Diario fotografico per monitorare la crescita e la salute nel tempo.</p>
-
                   {isLoadingPhotos ? <div className="loader-box"><div className="spin" /></div> : (
-                    <>
-                      <div className="photo-archive-grid">
-                        {plantPhotos.length === 0 ? (
-                          <div style={{ gridColumn: '1/-1', textAlign: 'center', padding: '20px 0', opacity: 0.4 }}>
-                            <CameraOff size={32} style={{ marginBottom: 8 }} />
-                            <p style={{ fontSize: '0.8rem' }}>Nessuna foto salvata.<br />Usa "CHECK FOTO" per iniziare l'album!</p>
-                          </div>
-                        ) : plantPhotos.map((p: any) => (
-                          <div
-                            key={p.id}
-                            className="photo-archive-item"
-                            onClick={() => setSelectedPhotoId(selectedPhotoId === p.id ? null : p.id)}
-                            style={{
-                              position: 'relative',
-                              border: selectedPhotoId === p.id ? '3px solid var(--primary)' : 'none',
-                              transform: selectedPhotoId === p.id ? 'scale(0.95)' : 'scale(1)',
-                              transition: 'all 0.2s',
-                              zIndex: selectedPhotoId === p.id ? 10 : 1
-                            }}
-                          >
-                            <img src={p.photo_url} alt="Crescita" style={{ opacity: selectedPhotoId === p.id ? 0.8 : 1 }} />
-                            <div className="photo-archive-date">{new Date(p.taken_at).toLocaleDateString()}</div>
-                            {selectedPhotoId === p.id && (
-                              <div style={{ position: 'absolute', top: 8, right: 8, background: 'var(--primary)', color: 'white', borderRadius: '50%', width: 24, height: 24, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                <CheckCircle2 size={16} />
-                              </div>
-                            )}
-                          </div>
-                        ))}
-                      </div>
-
-                      {selectedPhotoId && (
-                        <div style={{ marginTop: 16, display: 'flex', gap: 12, animation: 'fadeIn 0.3s ease-out' }}>
-                          <button
-                            onClick={() => {
-                              const photo = plantPhotos.find(p => p.id === selectedPhotoId);
-                              if (photo) window.open(photo.photo_url, '_blank');
-                            }}
-                            style={{ flex: 1, padding: 14, borderRadius: 16, border: 'none', background: 'var(--primary-light)', color: 'var(--primary-dark)', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}
-                          >
-                            <Maximize2 size={18} /> APRI
-                          </button>
-                          <button
-                            onClick={() => {
-                              showDeleteConfirmation("Vuoi eliminare questa foto?", async () => {
-                                setAchievementToast('Eliminazione foto in corso... ⏳');
-                                const res = await deletePlantPhoto(selectedPhotoId);
-                                if (res.success) {
-                                  setAchievementToast('Foto eliminata correttamente 🗑️');
-                                  setPlantPhotos(prev => prev.filter(p => p.id !== selectedPhotoId));
-                                  setSelectedPhotoId(null);
-                                  setTimeout(() => setAchievementToast(null), 3000);
-                                } else {
-                                  setAchievementToast('Errore eliminazione foto ❌');
-                                  setTimeout(() => setAchievementToast(null), 3000);
-                                }
-                              });
-                            }}
-                            style={{ flex: 1, padding: 14, borderRadius: 16, border: 'none', background: '#fee', color: '#c00', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}
-                          >
-                            <Trash2 size={18} /> ELIMINA
-                          </button>
+                    <div className="photo-archive-grid">
+                      {plantPhotos.length === 0 ? (
+                        <div style={{ gridColumn: '1/-1', textAlign: 'center', padding: '20px 0', opacity: 0.4 }}>
+                          <CameraOff size={32} style={{ marginBottom: 8 }} />
+                          <p style={{ fontSize: '0.8rem' }}>Nessuna foto salvata.<br />Usa "CHECK FOTO" per iniziare l'album!</p>
                         </div>
-                      )}
-                    </>
+                      ) : plantPhotos.map((p: any) => (
+                        <div key={p.id} className="photo-archive-item" onClick={() => window.open(p.photo_url, '_blank')}>
+                          <img src={p.photo_url} alt="Crescita" />
+                          <div className="photo-archive-date">{new Date(p.taken_at).toLocaleDateString()}</div>
+                        </div>
+                      ))}
+                    </div>
                   )}
                 </div>
               )}

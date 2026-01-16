@@ -2,7 +2,7 @@
 import React, { useState, useRef, useEffect, useMemo, Component } from 'react';
 import { createRoot } from 'react-dom/client';
 import { GoogleGenAI, Type } from '@google/genai';
-import { Camera, Send, Sprout, Info, RefreshCw, MessageSquare, Droplets, AlertTriangle, CheckCircle2, Settings, Moon, Bell, Mountain, Sparkles, History, Share2, Trash2, Zap, ChevronLeft, Key, ExternalLink, Trophy, Target, Gamepad2, Upload, User, ShieldAlert, Clock, Leaf, Apple, Layers, Maximize2, Terminal, ChevronRight, Star, Award, Sun, CameraOff, HelpCircle, ShieldCheck, Heart, LogOut, Mail, Code, Scissors, Inbox, Download, X, Home, BookOpen, Plus, Calendar, Flower, Flower2, TreePine, FileText, Package, Image as ImageIcon } from 'lucide-react';
+import { Camera, Send, Sprout, Info, RefreshCw, MessageSquare, Droplets, AlertTriangle, CheckCircle2, Settings, Moon, Bell, Mountain, Sparkles, History, Share2, Trash2, Zap, ChevronLeft, Key, ExternalLink, Trophy, Target, Gamepad2, Upload, User, ShieldAlert, Clock, Leaf, Apple, Layers, Maximize2, Terminal, ChevronRight, Star, Award, Sun, CameraOff, HelpCircle, ShieldCheck, Heart, LogOut, Mail, Code, Scissors, Inbox, Download, X, Home, BookOpen, Plus, Calendar, Flower, Flower2, TreePine, FileText } from 'lucide-react';
 
 import {
   registerUsername,
@@ -14,20 +14,15 @@ import {
   updateUserPlant,
   addCareEvent,
   fetchCareEvents,
-  deleteCareEvent,
   fetchPlantPhotos,
   addPlantPhoto,
-  deletePlantPhoto,
   deleteLeaderboardEntry,
   getLocalUsername,
   setLocalUsername,
   clearLocalUsername,
   captureImageAsBase64,
   fetchUserInfo,
-  updateUserInfo,
-  createCareProgram,
-  getCareProgram,
-  completeCheckpoint
+  updateUserInfo
 } from './apiClient';
 
 // Helper per Gemini (se non già presente)
@@ -105,400 +100,18 @@ const styles = `
 
   .app-shell {
     width: 100%;
-    max-width: 100%;
-    margin: 0;
-    height: 100dvh;
+    max-width: 480px;
+    margin: 0 auto;
+    height: 100dvh; /* Dynamic Viewport Height per gestire le barre browser */
     display: flex;
     flex-direction: column;
     position: relative;
-    background: linear-gradient(to bottom, #FFFFFF 0%, #FFFFFF 10%, #F5FBF5 30%, #E8F5E9 60%, #DCEDC8 85%, #C5E1A5 100%);
-    background-size: 100% 400%;
-    animation: gradientShift 20s ease infinite;
+    background: var(--bg-warm);
     overflow: hidden;
   }
-  
-  @keyframes gradientShift {
-    0% {
-      background-position: 0% 0%;
-    }
-    50% {
-      background-position: 0% 100%;
-    }
-    100% {
-      background-position: 0% 0%;
-    }
-  }
-  
-  /* Elementi 3D Fluttuanti */
-  .app-shell::before,
-  .app-shell::after {
-    content: '';
-    position: absolute;
-    border-radius: 50%;
-    filter: blur(80px);
-    opacity: 0.3;
-    animation: float3d 20s ease-in-out infinite;
-    z-index: 0;
-  }
-  
-  .app-shell::before {
-    width: 400px;
-    height: 400px;
-    background: radial-gradient(circle, rgba(129, 199, 132, 0.3) 0%, transparent 70%);
-    top: -100px;
-    right: -100px;
-    animation-delay: 0s;
-  }
-  
-  .app-shell::after {
-    width: 350px;
-    height: 350px;
-    background: radial-gradient(circle, rgba(197, 225, 165, 0.25) 0%, transparent 70%);
-    bottom: -80px;
-    left: -80px;
-    animation-delay: 5s;
-  }
-  
-  @keyframes float3d {
-    0%, 100% { 
-      transform: translate(0, 0) scale(1);
-      opacity: 0.3;
-    }
-    25% { 
-      transform: translate(30px, -30px) scale(1.1);
-      opacity: 0.4;
-    }
-    50% { 
-      transform: translate(-20px, 20px) scale(0.9);
-      opacity: 0.25;
-    }
-    75% { 
-      transform: translate(20px, 30px) scale(1.05);
-      opacity: 0.35;
-    }
-  }
-  
-  .app-shell > * {
-    position: relative;
-    z-index: 1;
-  }
-
-  /* Elementi Fluttuanti Aggiuntivi */
-  .floating-element {
-    position: absolute;
-    border-radius: 50%;
-    pointer-events: none;
-    z-index: 0;
-  }
-
-  .floating-element-1 {
-    width: 200px;
-    height: 200px;
-    background: radial-gradient(circle, rgba(165, 214, 167, 0.2) 0%, transparent 70%);
-    top: 20%;
-    left: 10%;
-    filter: blur(60px);
-    animation: float3dAlt1 15s ease-in-out infinite;
-  }
-
-  .floating-element-2 {
-    width: 250px;
-    height: 250px;
-    background: radial-gradient(circle, rgba(220, 237, 200, 0.25) 0%, transparent 70%);
-    top: 50%;
-    right: 15%;
-    filter: blur(70px);
-    animation: float3dAlt2 18s ease-in-out infinite;
-    animation-delay: 3s;
-  }
-
-  .floating-element-3 {
-    width: 180px;
-    height: 180px;
-    background: radial-gradient(circle, rgba(129, 199, 132, 0.15) 0%, transparent 70%);
-    bottom: 30%;
-    left: 20%;
-    filter: blur(50px);
-    animation: float3dAlt3 22s ease-in-out infinite;
-    animation-delay: 7s;
-  }
-
-  .floating-element-4 {
-    width: 220px;
-    height: 220px;
-    background: radial-gradient(circle, rgba(197, 225, 165, 0.18) 0%, transparent 70%);
-    top: 35%;
-    right: 25%;
-    filter: blur(65px);
-    animation: float3dAlt1 17s ease-in-out infinite;
-    animation-delay: 10s;
-  }
-
-  @keyframes float3dAlt1 {
-    0%, 100% { 
-      transform: translate(0, 0) rotate(0deg) scale(1);
-      opacity: 0.3;
-    }
-    33% { 
-      transform: translate(40px, -25px) rotate(120deg) scale(1.15);
-      opacity: 0.4;
-    }
-    66% { 
-      transform: translate(-30px, 35px) rotate(240deg) scale(0.85);
-      opacity: 0.25;
-    }
-  }
-
-  @keyframes float3dAlt2 {
-    0%, 100% { 
-      transform: translate(0, 0) rotate(0deg) scale(1);
-      opacity: 0.35;
-    }
-    40% { 
-      transform: translate(-35px, 30px) rotate(144deg) scale(0.9);
-      opacity: 0.25;
-    }
-    80% { 
-      transform: translate(25px, -40px) rotate(288deg) scale(1.1);
-      opacity: 0.4;
-    }
-  }
-
-  @keyframes float3dAlt3 {
-    0%, 100% { 
-      transform: translate(0, 0) scale(1);
-      opacity: 0.25;
-    }
-    50% { 
-      transform: translate(20px, -20px) scale(1.2);
-      opacity: 0.35;
-    }
-  }
-
-  /* Ombre Botaniche - Foglie Fluttuanti */
-  .botanical-shadow {
-    position: absolute;
-    pointer-events: none;
-    z-index: 0;
-    opacity: 0.08;
-  }
-
-  .botanical-shadow-1 {
-    width: 150px;
-    height: 150px;
-    top: 15%;
-    left: 5%;
-    background: radial-gradient(ellipse at center, rgba(27, 94, 32, 0.4) 0%, transparent 60%);
-    border-radius: 50% 0% 50% 50%;
-    transform: rotate(45deg);
-    animation: botanicalFloat1 25s ease-in-out infinite;
-  }
-
-  .botanical-shadow-2 {
-    width: 120px;
-    height: 180px;
-    top: 60%;
-    right: 8%;
-    background: radial-gradient(ellipse at center, rgba(46, 125, 50, 0.3) 0%, transparent 65%);
-    border-radius: 80% 20% 80% 20%;
-    transform: rotate(-30deg);
-    animation: botanicalFloat2 30s ease-in-out infinite;
-    animation-delay: 5s;
-  }
-
-  .botanical-shadow-3 {
-    width: 100px;
-    height: 100px;
-    bottom: 20%;
-    left: 15%;
-    background: radial-gradient(circle, rgba(56, 142, 60, 0.35) 0%, transparent 70%);
-    border-radius: 50% 50% 0% 50%;
-    transform: rotate(120deg);
-    animation: botanicalFloat3 20s ease-in-out infinite;
-    animation-delay: 10s;
-  }
-
-  @keyframes botanicalFloat1 {
-    0%, 100% { 
-      transform: rotate(45deg) translate(0, 0) scale(1);
-      opacity: 0.08;
-    }
-    50% { 
-      transform: rotate(65deg) translate(20px, -15px) scale(1.1);
-      opacity: 0.12;
-    }
-  }
-
-  @keyframes botanicalFloat2 {
-    0%, 100% { 
-      transform: rotate(-30deg) translate(0, 0) scale(1);
-      opacity: 0.08;
-    }
-    50% { 
-      transform: rotate(-50deg) translate(-25px, 20px) scale(0.95);
-      opacity: 0.1;
-    }
-  }
-
-  @keyframes botanicalFloat3 {
-    0%, 100% { 
-      transform: rotate(120deg) translate(0, 0);
-      opacity: 0.08;
-    }
-    50% { 
-      transform: rotate(140deg) translate(15px, -10px);
-      opacity: 0.11;
-    }
-  }
-
-  /* Bordi Angolari Stile Mirino - Box Piccoli */
-  .viewfinder-box {
-    position: relative;
-    background: rgba(255, 255, 255, 0.6);
-    backdrop-filter: blur(10px);
-    border-radius: 24px;
-    padding: 20px;
-  }
-
-  .viewfinder-box::before,
-  .viewfinder-box::after {
-    content: '';
-    position: absolute;
-    width: 20px;
-    height: 20px;
-    border-color: var(--primary);
-    border-style: solid;
-  }
-
-  /* Top-left corner */
-  .viewfinder-box::before {
-    top: 8px;
-    left: 8px;
-    border-width: 3px 0 0 3px;
-    border-radius: 16px 0 0 0;
-  }
-
-  /* Bottom-right corner */
-  .viewfinder-box::after {
-    bottom: 8px;
-    right: 8px;
-    border-width: 0 3px 3px 0;
-    border-radius: 0 0 16px 0;
-  }
-
-  /* Additional corners using pseudo-elements on child */
-  .viewfinder-box > *:first-child::before,
-  .viewfinder-box > *:first-child::after {
-    content: '';
-    position: absolute;
-    width: 20px;
-    height: 20px;
-    border-color: var(--primary);
-    border-style: solid;
-    z-index: 1;
-  }
-
-  /* Top-right corner */
-  .viewfinder-box > *:first-child::before {
-    top: 8px;
-    right: 8px;
-    border-width: 3px 3px 0 0;
-    border-radius: 0 16px 0 0;
-  }
-
-  /* Bottom-left corner */
-  .viewfinder-box > *:first-child::after {
-    bottom: 8px;
-    left: 8px;
-    border-width: 0 0 3px 3px;
-    border-radius: 0 0 0 16px;
-  }
-
-  /* Bordi Mirino per Container Principale */
-  .camera-overlay-corners::before,
-  .camera-overlay-corners::after {
-    content: '';
-    position: absolute;
-    width: 30px;
-    height: 30px;
-    border-color: #1B5E20;
-    border-style: solid;
-    z-index: 10;
-  }
-
-  /* Top-left corner - Main Container */
-  .camera-overlay-corners::before {
-    top: 16px;
-    left: 16px;
-    border-width: 4px 0 0 4px;
-    border-radius: 20px 0 0 0;
-  }
-
-  /* Bottom-right corner - Main Container */
-  .camera-overlay-corners::after {
-    bottom: 16px;
-    right: 16px;
-    border-width: 0 4px 4px 0;
-    border-radius: 0 0 20px 0;
-  }
-
-  /* Pulse Animation for Buttons */
-  @keyframes pulse {
-    0%, 100% {
-      box-shadow: 0 12px 40px rgba(46, 125, 50, 0.4), 0 0 0 0 rgba(46, 125, 50, 0.4);
-    }
-    50% {
-      box-shadow: 0 12px 40px rgba(46, 125, 50, 0.4), 0 0 0 10px rgba(46, 125, 50, 0);
-    }
-  }
-
-  /* Wiggle Animation - Button 1 (Camera) */
-  @keyframes wiggle1 {
-    0%, 90%, 100% {
-      transform: translateY(0) scale(1) rotate(0deg);
-    }
-    91% {
-      transform: translateY(0) scale(1) rotate(-5deg);
-    }
-    93% {
-      transform: translateY(0) scale(1) rotate(5deg);
-    }
-    95% {
-      transform: translateY(0) scale(1) rotate(-5deg);
-    }
-    97% {
-      transform: translateY(0) scale(1) rotate(5deg);
-    }
-    99% {
-      transform: translateY(0) scale(1) rotate(0deg);
-    }
-  }
-
-  /* Wiggle Animation - Button 2 (Gallery) */
-  @keyframes wiggle2 {
-    0%, 40%, 100% {
-      transform: translateY(0) scale(1) rotate(0deg);
-    }
-    41% {
-      transform: translateY(0) scale(1) rotate(-5deg);
-    }
-    43% {
-      transform: translateY(0) scale(1) rotate(5deg);
-    }
-    45% {
-      transform: translateY(0) scale(1) rotate(-5deg);
-    }
-    47% {
-      transform: translateY(0) scale(1) rotate(5deg);
-    }
-    49% {
-      transform: translateY(0) scale(1) rotate(0deg);
-    }
-  }
-
 
   header {
-    padding: 8px 12px;
+    padding: 12px 16px;
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -506,23 +119,10 @@ const styles = `
     flex-shrink: 0;
   }
 
-  /* Responsive header per smartphone */
-  @media (max-width: 480px) {
-    header {
-      padding: 6px 8px;
-    }
-  }
-
   .logo {
     display: flex;
     align-items: center;
     gap: 8px;
-  }
-
-  @media (max-width: 480px) {
-    .logo {
-      gap: 6px;
-    }
   }
 
   .logo h1 {
@@ -533,22 +133,10 @@ const styles = `
     color: var(--primary);
   }
 
-  @media (max-width: 480px) {
-    .logo h1 {
-      font-size: 0.95rem;
-    }
-  }
-
   .header-actions {
     display: flex;
     gap: 4px;
     align-items: center;
-  }
-
-  @media (max-width: 480px) {
-    .header-actions {
-      gap: 2px;
-    }
   }
 
   .btn-header-icon {
@@ -562,18 +150,7 @@ const styles = `
     justify-content: center;
     transition: transform 0.2s;
     border-radius: 50%;
-    min-width: 36px;
-    min-height: 36px;
   }
-
-  @media (max-width: 480px) {
-    .btn-header-icon {
-      padding: 6px;
-      min-width: 32px;
-      min-height: 32px;
-    }
-  }
-
   .btn-header-icon:active { transform: scale(0.9); background: var(--primary-light); }
 
   .badge-xp-large {
@@ -585,41 +162,29 @@ const styles = `
     font-weight: 800;
   }
 
-  @media (max-width: 480px) {
-    .badge-xp-large {
-      padding: 4px 8px;
-      font-size: 0.7rem;
-    }
-  }
-
   .main-frame {
     position: relative;
-    width: 100%;
+    width: calc(100% - 24px);
     flex: 1;
-    background: transparent; /* Fix per rimuovere cornice nera in dark mode */
-    border-radius: 0;
+    max-height: 58vh; /* Riduzione significativa per dare spazio ai tasti inferiori su browser */
+    background: var(--white);
+    border-radius: 40px;
+    padding: 8px;
+    box-shadow: 0 12px 32px rgba(0,0,0,0.06);
+    border: 1px solid var(--card-border);
+    margin: 0 auto;
+    overflow: hidden;
     display: flex;
     flex-direction: column;
-    padding: 0;
-    box-shadow: none;
-    border: none;
-    margin: 0;
-    overflow: hidden;
-  }
-
-  @media (max-width: 480px) {
-    .main-frame {
-      width: 100%;
-    }
   }
 
   .frame-inner {
     width: 100%;
     height: 100%;
     flex: 1;
-    border-radius: 0;
+    border-radius: 32px;
     overflow: hidden;
-    background: transparent;
+    background: #000;
     position: relative;
     display: flex;
     flex-direction: column;
@@ -703,49 +268,27 @@ const styles = `
     display: flex;
     flex-direction: column;
     align-items: center;
-    justify-content: flex-start;
+    justify-content: center;
     position: relative;
     overflow: hidden;
-    padding-top: 60px;
-  }
-
-  @media (max-width: 480px) {
-    .camera-off-overlay {
-      padding-top: 40px;
-    }
   }
 
   .logo-off-center {
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 16px;
+    gap: 12px;
     color: var(--primary-dark);
-    opacity: 0.9;
-    transform: scale(1.4);
-    margin-bottom: 20px;
-  }
-
-  @media (max-width: 480px) {
-    .logo-off-center {
-      transform: scale(1.2);
-      margin-bottom: 16px;
-    }
+    opacity: 0.8;
+    transform: scale(1.2);
   }
 
   .logo-off-center h2 {
     margin: 0;
-    font-size: 1.1rem;
+    font-size: 1rem;
     font-weight: 800;
     letter-spacing: 0.4em;
     text-transform: uppercase;
-  }
-
-  @media (max-width: 480px) {
-    .logo-off-center h2 {
-      font-size: 0.95rem;
-      letter-spacing: 0.35em;
-    }
   }
 
   .btn-analyze-toast {
@@ -1266,18 +809,6 @@ interface UserStats {
   username?: string;
 }
 
-interface Quest {
-  id: string;
-  type: string;
-  title: string;
-  icon: React.ReactNode;
-  xp: number;
-  requirement?: string;
-  desc: string;
-  count?: number; // Optional property
-  isWeekly?: boolean;
-}
-
 const WEEKLY_THEMES = [
   { requirement: 'Rosa', title: 'La Rosa più Bella', icon: <Flower2 size={24} /> },
   { requirement: 'Orchidea', title: 'Orchidea Reale', icon: <Flower size={24} /> },
@@ -1313,7 +844,7 @@ const getWeeklyChallengeInfo = () => {
 
 const weeklyChallenge = getWeeklyChallengeInfo();
 
-const QUESTS: Quest[] = [
+const QUESTS = [
   weeklyChallenge,
   { id: 'mushroom', type: 'photo', title: 'Cacciatore di Funghi', icon: <Mountain size={24} />, xp: 120, requirement: 'Fungo', desc: 'Trova e fotografa un fungo, poi rispondi alle domande.' },
   { id: 'succulent', type: 'photo', title: 'Giungla Arida', icon: <Sprout size={24} />, xp: 50, requirement: 'Succulenta', desc: 'Fotografa una pianta grassa e supera il quiz.' },
@@ -1433,19 +964,11 @@ function App() {
   const [isGeneratingPlan, setIsGeneratingPlan] = useState(false);
   const [itemToDelete, setItemToDelete] = useState<string | null>(null);
   const [plantPhotos, setPlantPhotos] = useState<any[]>([]);
-  const [selectedPhotoId, setSelectedPhotoId] = useState<string | null>(null);
   const [isLoadingPhotos, setIsLoadingPhotos] = useState(false);
   const [notificationsEnabled, setNotificationsEnabled] = useState(true); // New state for notifications
   const [lightLevel, setLightLevel] = useState<number | null>(null); // Lux value
   const [lightSensorSupported, setLightSensorSupported] = useState(false);
   const lightSensorRef = useRef<any>(null);
-
-  // Stati per sistema di cura progressivo
-  const [activeCareProgram, setActiveCareProgram] = useState<any>(null);
-  const [isLoadingProgram, setIsLoadingProgram] = useState(false);
-  const [isCheckpointMode, setIsCheckpointMode] = useState(false);
-  const [currentCheckpoint, setCurrentCheckpoint] = useState<any>(null);
-  const [showCareProgramDashboard, setShowCareProgramDashboard] = useState(false);
 
   const [confirmToast, setConfirmToast] = useState<{ message: string, onConfirm: () => void, onCancel: () => void } | null>(null);
   const lastLeaderboardFetch = useRef<number>(0);
@@ -1501,7 +1024,6 @@ function App() {
   };
 
   // Check piante che necessitano cure
-  // Check piante che necessitano cure
   const checkPlantsNeedingCare = (plants: any[]) => {
     if (!notificationsEnabled || Notification.permission !== 'granted') return;
 
@@ -1533,31 +1055,6 @@ function App() {
       setTimeout(() => setAchievementToast(null), 6000);
     }
   };
-
-  // Carica programma di cura per una pianta
-  const loadCareProgram = async (plantId: string) => {
-    setIsLoadingProgram(true);
-    try {
-      const result = await getCareProgram(plantId);
-      if (result.success && result.program) {
-        setActiveCareProgram(result);
-      } else {
-        setActiveCareProgram(null);
-      }
-    } catch (error) {
-      console.error('Error loading care program:', error);
-      setActiveCareProgram(null);
-    } finally {
-      setIsLoadingProgram(false);
-    }
-  };
-
-  // Carica programma di cura quando si apre dettaglio pianta
-  useEffect(() => {
-    if (fullScreenAnalysis?.id && fullScreenAnalysis.source === 'garden') {
-      loadCareProgram(fullScreenAnalysis.id);
-    }
-  }, [fullScreenAnalysis?.id]);
 
   useEffect(() => {
     if (activeGame === 'beauty_contest' || activeGame?.startsWith('weekly_') || isLeaderboardOpen) {
@@ -1888,14 +1385,8 @@ function App() {
     if (fullScreenAnalysis?.id && fullScreenAnalysis.source === 'garden') {
       fetchCareHistory(fullScreenAnalysis.id);
       fetchPhotos(fullScreenAnalysis.id);
-
-      // Carica programma di cura se esiste
-      loadCareProgram(fullScreenAnalysis.id);
     }
   }, [fullScreenAnalysis?.id]);
-
-
-
 
 
   useEffect(() => {
@@ -2356,97 +1847,7 @@ function App() {
     setIsSettingsOpen(false);
   };
 
-  const capture = async () => {
-    // ========== MODALITÀ CHECKPOINT ==========
-    if (isCheckpointMode) {
-      if (!videoRef.current || !canvasRef.current) return;
-
-      const c = canvasRef.current;
-      const v = videoRef.current;
-      const size = Math.min(v.videoWidth, v.videoHeight);
-      const startX = (v.videoWidth - size) / 2;
-      const startY = (v.videoHeight - size) / 2;
-      c.width = 1024;
-      c.height = 1024;
-      c.getContext('2d')?.drawImage(v, startX, startY, size, size, 0, 0, 1024, 1024);
-      const photo = c.toDataURL('image/jpeg');
-
-      setIsCameraOn(false);
-      setIsAnalyzing(true);
-
-      try {
-        // Analisi AI
-        const ai = new GoogleGenAI({ apiKey: GEMINI_KEY });
-        const res = await ai.models.generateContent({
-          model: 'gemini-2.0-flash-exp',
-          contents: {
-            parts: [
-              { inlineData: { data: photo.split(',')[1], mimeType: 'image/jpeg' } },
-              { text: "Analizza questa pianta. Restituisci JSON con: healthScore (0-100), improvements (array di miglioramenti rilevati), recommendations (consigli)." }
-            ]
-          },
-          config: {
-            responseMimeType: "application/json",
-            responseSchema: {
-              type: Type.OBJECT,
-              properties: {
-                healthScore: { type: Type.NUMBER },
-                improvements: { type: Type.ARRAY, items: { type: Type.STRING } },
-                recommendations: { type: Type.STRING }
-              }
-            }
-          }
-        });
-
-        const aiAnalysis = JSON.parse(res.text || '{}');
-
-        // Se è il primo checkpoint (creazione programma)
-        if (!activeCareProgram && fullScreenAnalysis) {
-          const result = await createCareProgram(
-            fullScreenAnalysis.id,
-            username!,
-            aiAnalysis.healthScore,
-            lightLevel || 0,
-            photo,
-            fullScreenAnalysis.name,
-            fullScreenAnalysis.scientificName
-          );
-
-          if (result.success) {
-            setAchievementToast('🎉 Programma di cura creato con successo!');
-            await loadCareProgram(fullScreenAnalysis.id);
-          }
-        } else if (currentCheckpoint) {
-          // Completa checkpoint esistente
-          const result = await completeCheckpoint(
-            currentCheckpoint.id,
-            photo,
-            lightLevel || 0,
-            aiAnalysis
-          );
-
-          if (result.success) {
-            setAchievementToast(result.message || '✅ Checkpoint completato!');
-            if (fullScreenAnalysis) {
-              await loadCareProgram(fullScreenAnalysis.id);
-            }
-          }
-        }
-
-        setIsCheckpointMode(false);
-        setCurrentCheckpoint(null);
-        setActiveMode('garden');
-
-      } catch (e) {
-        alert("Errore analisi checkpoint.");
-      } finally {
-        setIsAnalyzing(false);
-      }
-
-      return;
-    }
-    // ========== FINE MODALITÀ CHECKPOINT ==========
-
+  const capture = () => {
     const quest = QUESTS.find(q => q.id === activeGame);
     if (activeGame && (quest?.type === 'photo' || quest?.type === 'beauty')) {
       handleQuestPhotoCapture();
@@ -2548,7 +1949,7 @@ function App() {
       const res = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
         contents: context + input,
-        config: { systemInstruction: "Sei BioExpert AI. Rispondi in Italiano con tono amichevole ma esperto. IMPORTANTE: Usa liste puntate (- punto) per elenchi. Usa il **grassetto** per concetti chiave. Sii ordinato e pulito. Se la pianta è malata, dividi la risposta in sezioni chiare." }
+        config: { systemInstruction: "Sei BioExpert AI. Rispondi brevemente e professionalmente in Italiano. Usa un tono amichevole ma esperto. Se la pianta è malata, sii molto specifico sulla cura." }
       });
       setMessages(prev => [...prev, { role: 'bot', text: res.text || "Errore risposta." }]);
       addXp(5);
@@ -2576,17 +1977,6 @@ function App() {
     <div className="app-shell">
       <style>{styles}</style>
 
-      {/* Elementi 3D Fluttuanti */}
-      <div className="floating-element floating-element-1"></div>
-      <div className="floating-element floating-element-2"></div>
-      <div className="floating-element floating-element-3"></div>
-      <div className="floating-element floating-element-4"></div>
-
-      {/* Ombre Botaniche */}
-      <div className="botanical-shadow botanical-shadow-1"></div>
-      <div className="botanical-shadow botanical-shadow-2"></div>
-      <div className="botanical-shadow botanical-shadow-3"></div>
-
       {achievementToast && <div className="achievement-toast"><Trophy size={18} /> {achievementToast}</div>}
 
       {showInstallHint && (
@@ -2604,137 +1994,22 @@ function App() {
         </div>
       )}
 
-      {/* Palline Fluttuanti Sullo Sfondo */}
-      <div style={{ position: 'fixed', inset: 0, zIndex: 0, pointerEvents: 'none', overflow: 'hidden' }}>
-        {/* Pallina Verde Grande */}
-        <div style={{
-          position: 'absolute',
-          width: 120,
-          height: 120,
-          borderRadius: '50%',
-          background: 'radial-gradient(circle at 30% 30%, rgba(139, 195, 74, 0.3), rgba(139, 195, 74, 0.05))',
-          top: '15%',
-          left: '10%',
-          animation: 'float3d 20s ease-in-out infinite',
-          filter: 'blur(40px)'
-        }}></div>
-        {/* Pallina Gialla Media */}
-        <div style={{
-          position: 'absolute',
-          width: 80,
-          height: 80,
-          borderRadius: '50%',
-          background: 'radial-gradient(circle at 30% 30%, rgba(255, 235, 59, 0.25), rgba(255, 235, 59, 0.03))',
-          top: '60%',
-          right: '15%',
-          animation: 'float3dAlt 25s ease-in-out infinite 5s',
-          filter: 'blur(30px)'
-        }}></div>
-        {/* Pallina Verde Chiaro Piccola */}
-        <div style={{
-          position: 'absolute',
-          width: 60,
-          height: 60,
-          borderRadius: '50%',
-          background: 'radial-gradient(circle at 30% 30%, rgba(174, 213, 129, 0.35), rgba(174, 213, 129, 0.05))',
-          bottom: '25%',
-          left: '20%',
-          animation: 'float3dAlt2 18s ease-in-out infinite 10s',
-          filter: 'blur(25px)'
-        }}></div>
-        {/* Pallina Verde Scuro */}
-        <div style={{
-          position: 'absolute',
-          width: 100,
-          height: 100,
-          borderRadius: '50%',
-          background: 'radial-gradient(circle at 30% 30%, rgba(46, 125, 50, 0.2), rgba(46, 125, 50, 0.02))',
-          top: '40%',
-          right: '8%',
-          animation: 'float3dAlt3 22s ease-in-out infinite 3s',
-          filter: 'blur(35px)'
-        }}></div>
-        {/* Pallina Lime */}
-        <div style={{
-          position: 'absolute',
-          width: 70,
-          height: 70,
-          borderRadius: '50%',
-          background: 'radial-gradient(circle at 30% 30%, rgba(205, 220, 57, 0.3), rgba(205, 220, 57, 0.04))',
-          bottom: '15%',
-          right: '25%',
-          animation: 'float3d 28s ease-in-out infinite 7s',
-          filter: 'blur(28px)'
-        }}></div>
-      </div>
-
-      <header style={{
-        background: 'transparent',
-        padding: '12px 16px',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        zIndex: 50,
-        position: 'relative'
-      }}>
-        <div className="logo" onClick={() => { setActiveMode('scan'); setIsCameraOn(true); }} style={{
-          cursor: 'pointer',
-          display: 'flex',
-          alignItems: 'center',
-          gap: 8
-        }}>
-          {/* Logo Minimal senza sfondo */}
-          <Sprout size={24} color="#2E7D32" strokeWidth={2.5} />
-          <h1 style={{
-            color: '#1B5E20',
-            margin: 0,
-            fontSize: '1.2rem',
-            fontWeight: 800,
-            letterSpacing: '-0.02em'
-          }}>BioExpert</h1>
+      <header>
+        <div className="logo" onClick={() => { setActiveMode('scan'); setIsCameraOn(true); }} style={{ cursor: 'pointer' }}>
+          <Sprout size={24} color="var(--primary)" />
+          <div>
+            <h1>BioExpert</h1>
+            <div style={{ height: 4, background: 'rgba(0,0,0,0.05)', borderRadius: 2, overflow: 'hidden', marginTop: 2, width: 60 }}>
+              <div style={{ height: '100%', background: 'var(--primary)', width: `${((xp % 1000) / 1000) * 100}%` }}></div>
+            </div>
+          </div>
         </div>
-
-        <div className="header-actions" style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-          <div className="badge-xp-large" style={{
-            background: '#FFD700',
-            color: '#333',
-            fontWeight: 900,
-            padding: '4px 10px',
-            borderRadius: 16,
-            fontSize: '0.7rem',
-            boxShadow: '0 2px 6px rgba(255, 215, 0, 0.3)',
-            border: 'none',
-            marginRight: 2
-          }}>LV.{level}</div>
-
-          {/* Pulsanti Circolari Minimal */}
-          {[
-            { icon: <Trophy size={16} />, action: () => setIsLeaderboardOpen(true) },
-            { icon: <History size={16} />, action: () => setIsHistoryOpen(true) },
-            { icon: <Gamepad2 size={16} />, action: () => setIsGamesOpen(true) },
-            { icon: <Settings size={16} />, action: () => setIsSettingsOpen(true) }
-          ].map((btn, i) => (
-            <button key={i} onClick={btn.action} style={{
-              width: 34,
-              height: 34,
-              borderRadius: '50%',
-              background: 'white',
-              border: '1px solid #A5D6A7',
-              color: '#2E7D32',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              cursor: 'pointer',
-              boxShadow: '0 2px 6px rgba(0,0,0,0.05)',
-              transition: 'all 0.2s',
-              padding: 0
-            }}
-              onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.05)'}
-              onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
-            >
-              {btn.icon}
-            </button>
-          ))}
+        <div className="header-actions">
+          <div className="badge-xp-large">LV.{level}</div>
+          <button className="btn-header-icon" onClick={() => setIsLeaderboardOpen(true)} aria-label="Classifica"><Trophy size={20} /></button>
+          <button className="btn-header-icon" onClick={() => setIsHistoryOpen(true)} aria-label="Erbario"><History size={20} /></button>
+          <button className="btn-header-icon" onClick={() => setIsGamesOpen(true)} aria-label="Sfide"><Gamepad2 size={20} /></button>
+          <button className="btn-header-icon" onClick={() => setIsSettingsOpen(true)} aria-label="Impostazioni"><Settings size={20} /></button>
         </div>
       </header>
 
@@ -2742,111 +2017,135 @@ function App() {
         <div className="frame-inner">
           {activeMode === 'garden' ? (
             <div style={{ height: '100%', width: '100%', background: 'var(--bg-warm)', overflowY: 'auto', padding: 20 }}>
-              <h2 style={{ color: 'var(--primary)', marginTop: 0, display: 'flex', alignItems: 'center', gap: 10, marginBottom: 20 }}>
+              <h2 style={{ color: 'var(--primary)', marginTop: 0, display: 'flex', alignItems: 'center', gap: 10 }}>
                 <Sprout size={28} /> Il Mio Giardino
               </h2>
 
-              {!username ? (
-                <div style={{ textAlign: 'center', marginTop: 40, padding: 20, background: 'var(--white)', borderRadius: 24, border: '1px solid var(--card-border)' }}>
-                  <h3 style={{ marginTop: 0 }}>Però... chi sei? 🤔</h3>
-                  <p style={{ opacity: 0.7, lineHeight: 1.5 }}>Per creare il tuo giardino digitale e salvare le tue piante, devi registrarti o accedere.</p>
-                  <button onClick={() => setShowAuthModal(true)} style={{ marginTop: 10, background: 'var(--primary)', color: 'white', border: 'none', padding: '12px 24px', borderRadius: 100, fontWeight: 800 }}>ACCEDI ORA</button>
-                </div>
-              ) : userPlants.length === 0 ? (
-                <div style={{ textAlign: 'center', marginTop: 40 }}>
-                  <div style={{ opacity: 0.3 }}><Sprout size={64} /></div>
-                  <h3 style={{ opacity: 0.5 }}>Il tuo giardino è vuoto</h3>
-                  <p style={{ opacity: 0.5 }}>Scatta una foto a una pianta e salvala qui!</p>
-                  <button onClick={() => setActiveMode('scan')} style={{ marginTop: 20, background: 'var(--primary-light)', color: 'var(--primary)', border: 'none', padding: '12px 24px', borderRadius: 100, fontWeight: 800 }}>VAI ALLA FOTOCAMERA</button>
-                </div>
-              ) : (
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                  <button onClick={() => { setActiveMode('scan'); setIsCameraOn(true); setIsGardenScanning(true); }} style={{ gridColumn: '1 / -1', padding: 16, border: '2px dashed var(--primary)', borderRadius: 20, background: 'var(--primary-light)', color: 'var(--primary)', fontWeight: 800, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
-                    <Plus size={20} /> AGGIUNGI NUOVA PIANTA
-                  </button>
-                  {userPlants.map((plant: any) => (
-                    <div key={plant.id} onClick={() => setFullScreenAnalysis({
-                      id: plant.id,
-                      name: plant.plant_name,
-                      scientificName: plant.scientific_name,
-                      image: plant.image_url,
-                      healthStatus: (plant.health_status || 'healthy') as 'healthy' | 'sick' | 'unknown',
-                      diagnosis: plant.diagnosis || 'Nessuna diagnosi disponibile',
-                      carePlan: plant.notes,
-                      care: {
-                        watering: plant.watering_guide || 'Controlla il terreno regolarmente',
-                        general: plant.sunlight_guide || 'Posiziona in zona luminosa',
-                        pruning: plant.pruning_guide || 'Rimuovi foglie secche all\'occorrenza',
-                        repotting: plant.repotting_guide || 'Valuta ogni 2 anni'
-                      },
-                      lastCareAt: plant.last_care_at ? new Date(plant.last_care_at).getTime() : undefined,
-                      nextCheckAt: plant.next_check_at ? new Date(plant.next_check_at).getTime() : undefined,
-                      timestamp: new Date(plant.created_at).getTime(),
-                      category: 'Pianta',
-                      source: 'garden'
-                    })}
-                      style={{ background: 'var(--white)', borderRadius: 20, overflow: 'hidden', border: '1px solid var(--card-border)', boxShadow: '0 4px 10px rgba(0,0,0,0.03)', cursor: 'pointer', position: 'relative' }}>
+              <div style={{ display: 'flex', gap: 8, marginBottom: 20, background: 'var(--white)', padding: 6, borderRadius: 16, border: '1px solid var(--card-border)' }}>
+                <button onClick={() => setGardenTab('plants')} style={{ flex: 1, padding: '8px', borderRadius: 12, border: 'none', background: gardenTab === 'plants' ? 'var(--primary-light)' : 'transparent', color: gardenTab === 'plants' ? 'var(--primary)' : 'var(--text-muted)', fontWeight: 800, cursor: 'pointer', fontSize: '0.85rem' }}>Piante</button>
+                <button onClick={() => setGardenTab('care')} style={{ flex: 1, padding: '8px', borderRadius: 12, border: 'none', background: gardenTab === 'care' ? 'var(--primary-light)' : 'transparent', color: gardenTab === 'care' ? 'var(--primary)' : 'var(--text-muted)', fontWeight: 800, cursor: 'pointer', fontSize: '0.85rem' }}>Cura</button>
+                <button onClick={() => setGardenTab('notifications')} style={{ flex: 1, padding: '8px', borderRadius: 12, border: 'none', background: gardenTab === 'notifications' ? 'var(--primary-light)' : 'transparent', color: gardenTab === 'notifications' ? 'var(--primary)' : 'var(--text-muted)', fontWeight: 800, cursor: 'pointer', fontSize: '0.85rem' }}>Notifiche</button>
+              </div>
 
-                      {/* Badge Urgenza Cura con Livelli */}
-                      {plant.next_check_at && (() => {
-                        const daysOverdue = Math.floor((Date.now() - new Date(plant.next_check_at).getTime()) / (1000 * 60 * 60 * 24));
+              {gardenTab === 'plants' && (
+                !username ? (
+                  <div style={{ textAlign: 'center', marginTop: 40, padding: 20, background: 'var(--white)', borderRadius: 24, border: '1px solid var(--card-border)' }}>
+                    <h3 style={{ marginTop: 0 }}>Però... chi sei? 🤔</h3>
+                    <p style={{ opacity: 0.7, lineHeight: 1.5 }}>Per creare il tuo giardino digitale e salvare le tue piante, devi registrarti o accedere.</p>
+                    <button onClick={() => setShowAuthModal(true)} style={{ marginTop: 10, background: 'var(--primary)', color: 'white', border: 'none', padding: '12px 24px', borderRadius: 100, fontWeight: 800 }}>ACCEDI ORA</button>
+                  </div>
+                ) : userPlants.length === 0 ? (
+                  <div style={{ textAlign: 'center', marginTop: 40 }}>
+                    <div style={{ opacity: 0.3 }}><Sprout size={64} /></div>
+                    <h3 style={{ opacity: 0.5 }}>Il tuo giardino è vuoto</h3>
+                    <p style={{ opacity: 0.5 }}>Scatta una foto a una pianta e salvala qui!</p>
+                    <button onClick={() => setActiveMode('scan')} style={{ marginTop: 20, background: 'var(--primary-light)', color: 'var(--primary)', border: 'none', padding: '12px 24px', borderRadius: 100, fontWeight: 800 }}>VAI ALLA FOTOCAMERA</button>
+                  </div>
+                ) : (
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                    <button onClick={() => { setActiveMode('scan'); setIsCameraOn(true); setIsGardenScanning(true); }} style={{ gridColumn: '1 / -1', padding: 16, border: '2px dashed var(--primary)', borderRadius: 20, background: 'var(--primary-light)', color: 'var(--primary)', fontWeight: 800, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+                      <Plus size={20} /> AGGIUNGI NUOVA PIANTA
+                    </button>
+                    {userPlants.map((plant: any) => (
+                      <div key={plant.id} onClick={() => setFullScreenAnalysis({
+                        id: plant.id,
+                        name: plant.plant_name,
+                        scientificName: plant.scientific_name,
+                        image: plant.image_url,
+                        healthStatus: plant.health_status,
+                        diagnosis: 'Vedi Piano Cura per dettagli',
+                        carePlan: plant.notes,
+                        care: {
+                          watering: plant.watering_guide || 'Controlla il terreno regolarmente',
+                          general: plant.sunlight_guide || 'Posiziona in zona luminosa',
+                          pruning: plant.pruning_guide || 'Rimuovi foglie secche all\'occorrenza',
+                          repotting: plant.repotting_guide || 'Valuta ogni 2 anni'
+                        },
+                        lastCareAt: plant.last_care_at ? new Date(plant.last_care_at).getTime() : undefined,
+                        nextCheckAt: plant.next_check_at ? new Date(plant.next_check_at).getTime() : undefined,
+                        timestamp: new Date(plant.created_at).getTime(),
+                        category: 'Pianta',
+                        source: 'garden'
+                      })}
+                        style={{ background: 'var(--white)', borderRadius: 20, overflow: 'hidden', border: '1px solid var(--card-border)', boxShadow: '0 4px 10px rgba(0,0,0,0.03)', cursor: 'pointer', position: 'relative' }}>
 
-                        if (daysOverdue >= 7) {
-                          // Rosso: 7+ giorni di ritardo
-                          return (
-                            <div style={{ position: 'absolute', top: 12, left: 12, zIndex: 10, background: '#d32f2f', color: 'white', padding: '6px 10px', borderRadius: 8, fontSize: '0.65rem', fontWeight: 900, boxShadow: '0 4px 8px rgba(211,47,47,0.4)', display: 'flex', alignItems: 'center', gap: 4 }}>
-                              <AlertTriangle size={12} /> URGENTE ({daysOverdue}g)
-                            </div>
-                          );
-                        } else if (daysOverdue >= 3) {
-                          // Arancione: 3-6 giorni di ritardo
-                          return (
-                            <div style={{ position: 'absolute', top: 12, left: 12, zIndex: 10, background: '#f57c00', color: 'white', padding: '6px 10px', borderRadius: 8, fontSize: '0.65rem', fontWeight: 900, boxShadow: '0 4px 8px rgba(245,124,0,0.4)', display: 'flex', alignItems: 'center', gap: 4 }}>
-                              <Clock size={12} /> ATTENZIONE ({daysOverdue}g)
-                            </div>
-                          );
-                        } else if (daysOverdue >= 0) {
-                          // Giallo: 0-2 giorni di ritardo
-                          return (
-                            <div style={{ position: 'absolute', top: 12, left: 12, zIndex: 10, background: '#fbc02d', color: '#333', padding: '6px 10px', borderRadius: 8, fontSize: '0.65rem', fontWeight: 900, boxShadow: '0 4px 8px rgba(251,192,45,0.4)', display: 'flex', alignItems: 'center', gap: 4 }}>
-                              <Droplets size={12} /> DA CURARE
-                            </div>
-                          );
-                        } else if (daysOverdue >= -2) {
-                          // Verde chiaro: prossimi 2 giorni
-                          return (
-                            <div style={{ position: 'absolute', top: 12, left: 12, zIndex: 10, background: '#66bb6a', color: 'white', padding: '6px 10px', borderRadius: 8, fontSize: '0.65rem', fontWeight: 900, boxShadow: '0 4px 8px rgba(102,187,106,0.3)', display: 'flex', alignItems: 'center', gap: 4 }}>
-                              <Calendar size={12} /> PROSSIMAMENTE
-                            </div>
-                          );
-                        }
-                        return null;
-                      })()}
+                        {/* Badge Urgenza Cura con Livelli */}
+                        {plant.next_check_at && (() => {
+                          const daysOverdue = Math.floor((Date.now() - new Date(plant.next_check_at).getTime()) / (1000 * 60 * 60 * 24));
 
-                      <div style={{ height: 120, background: '#eee', position: 'relative' }}>
-                        <img src={plant.image_url || 'https://placehold.co/400x300?text=Pianta'} style={{ width: '100%', height: '100%', objectFit: 'cover' }} onError={(e) => (e.currentTarget.style.display = 'none')} />
-                        {!plant.image_url && <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: 0.3 }}><Sprout size={32} /></div>}
-                        <div style={{ position: 'absolute', top: 8, right: 8, background: plant.health_status === 'sick' ? '#ffebee' : '#e8f5e9', padding: '4px 8px', borderRadius: 8, fontSize: '0.65rem', fontWeight: 800, color: plant.health_status === 'sick' ? '#d32f2f' : '#2e7d32' }}>
-                          {plant.health_status === 'sick' ? 'MALATA' : 'SANA'}
-                        </div>
-                      </div>
-                      <div style={{ padding: 12 }}>
-                        <div style={{ fontWeight: 800, fontSize: '0.9rem', marginBottom: 2 }}>{plant.nickname || plant.plant_name}</div>
-                        <div style={{ fontSize: '0.75rem', opacity: 0.6, fontStyle: 'italic', marginBottom: 8 }}>{plant.scientific_name}</div>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                          <div style={{ display: 'flex', gap: 6, opacity: 0.5 }}>
-                            <Droplets size={14} />
-                            <Sun size={14} />
+                          if (daysOverdue >= 7) {
+                            // Rosso: 7+ giorni di ritardo
+                            return (
+                              <div style={{ position: 'absolute', top: 12, left: 12, zIndex: 10, background: '#d32f2f', color: 'white', padding: '6px 10px', borderRadius: 8, fontSize: '0.65rem', fontWeight: 900, boxShadow: '0 4px 8px rgba(211,47,47,0.4)', display: 'flex', alignItems: 'center', gap: 4 }}>
+                                <AlertTriangle size={12} /> URGENTE ({daysOverdue}g)
+                              </div>
+                            );
+                          } else if (daysOverdue >= 3) {
+                            // Arancione: 3-6 giorni di ritardo
+                            return (
+                              <div style={{ position: 'absolute', top: 12, left: 12, zIndex: 10, background: '#f57c00', color: 'white', padding: '6px 10px', borderRadius: 8, fontSize: '0.65rem', fontWeight: 900, boxShadow: '0 4px 8px rgba(245,124,0,0.4)', display: 'flex', alignItems: 'center', gap: 4 }}>
+                                <Clock size={12} /> ATTENZIONE ({daysOverdue}g)
+                              </div>
+                            );
+                          } else if (daysOverdue >= 0) {
+                            // Giallo: 0-2 giorni di ritardo
+                            return (
+                              <div style={{ position: 'absolute', top: 12, left: 12, zIndex: 10, background: '#fbc02d', color: '#333', padding: '6px 10px', borderRadius: 8, fontSize: '0.65rem', fontWeight: 900, boxShadow: '0 4px 8px rgba(251,192,45,0.4)', display: 'flex', alignItems: 'center', gap: 4 }}>
+                                <Droplets size={12} /> DA CURARE
+                              </div>
+                            );
+                          } else if (daysOverdue >= -2) {
+                            // Verde chiaro: prossimi 2 giorni
+                            return (
+                              <div style={{ position: 'absolute', top: 12, left: 12, zIndex: 10, background: '#66bb6a', color: 'white', padding: '6px 10px', borderRadius: 8, fontSize: '0.65rem', fontWeight: 900, boxShadow: '0 4px 8px rgba(102,187,106,0.3)', display: 'flex', alignItems: 'center', gap: 4 }}>
+                                <Calendar size={12} /> PROSSIMAMENTE
+                              </div>
+                            );
+                          }
+                          return null;
+                        })()}
+
+                        <div style={{ height: 120, background: '#eee', position: 'relative' }}>
+                          <img src={plant.image_url || 'https://placehold.co/400x300?text=Pianta'} style={{ width: '100%', height: '100%', objectFit: 'cover' }} onError={(e) => (e.currentTarget.style.display = 'none')} />
+                          {!plant.image_url && <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: 0.3 }}><Sprout size={32} /></div>}
+                          <div style={{ position: 'absolute', top: 8, right: 8, background: plant.health_status === 'sick' ? '#ffebee' : '#e8f5e9', padding: '4px 8px', borderRadius: 8, fontSize: '0.65rem', fontWeight: 800, color: plant.health_status === 'sick' ? '#d32f2f' : '#2e7d32' }}>
+                            {plant.health_status === 'sick' ? 'MALATA' : 'SANA'}
                           </div>
-                          {plant.next_check_at && (
-                            <div style={{ fontSize: '0.65rem', fontWeight: 700, opacity: 0.8 }}>
-                              {new Date(plant.next_check_at).toLocaleDateString()}
+                        </div>
+                        <div style={{ padding: 12 }}>
+                          <div style={{ fontWeight: 800, fontSize: '0.9rem', marginBottom: 2 }}>{plant.nickname || plant.plant_name}</div>
+                          <div style={{ fontSize: '0.75rem', opacity: 0.6, fontStyle: 'italic', marginBottom: 8 }}>{plant.scientific_name}</div>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <div style={{ display: 'flex', gap: 6, opacity: 0.5 }}>
+                              <Droplets size={14} />
+                              <Sun size={14} />
                             </div>
-                          )}
+                            {plant.next_check_at && (
+                              <div style={{ fontSize: '0.65rem', fontWeight: 700, opacity: 0.8 }}>
+                                {new Date(plant.next_check_at).toLocaleDateString()}
+                              </div>
+                            )}
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  ))}
+                    ))}
+                  </div>
+                )
+              )}
+
+              {gardenTab === 'care' && (
+                <div style={{ textAlign: 'center', marginTop: 40, opacity: 0.6 }}>
+                  <Clock size={48} style={{ marginBottom: 12 }} />
+                  <h3>Programma Cura</h3>
+                  <p>Presto potrai vedere qui il calendario delle innaffiature!</p>
+                </div>
+              )}
+
+              {gardenTab === 'notifications' && (
+                <div style={{ textAlign: 'center', marginTop: 40, opacity: 0.6 }}>
+                  <Bell size={48} style={{ marginBottom: 12 }} />
+                  <h3>Notifiche</h3>
+                  <p>Nessuna nuova notifica.</p>
                 </div>
               )}
             </div>
@@ -2857,7 +2156,7 @@ function App() {
               ) : capturedImg ? (
                 <div className="preview-container">
                   <img src={capturedImg} className="preview-image" />
-                  {!isAnalyzing && <button onClick={performAnalysis} style={{ position: 'absolute', bottom: 140, left: '50%', transform: 'translateX(-50%)', padding: '16px 32px', background: 'linear-gradient(135deg, #2E7D32 0%, #1B5E20 100%)', color: 'white', border: 'none', borderRadius: 100, fontWeight: 800, fontSize: '1rem', cursor: 'pointer', boxShadow: '0 8px 20px rgba(46, 125, 50, 0.4)', display: 'flex', alignItems: 'center', gap: 8, zIndex: 120 }}><Sparkles size={24} /> ANALIZZA ORA</button>}
+                  {!isAnalyzing && <button className="btn-analyze-toast" onClick={performAnalysis}><Sparkles size={24} /> ANALIZZA ORA</button>}
                   {isAnalyzing && <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', background: 'rgba(0,0,0,0.7)' }}><RefreshCw className="spin" size={40} /></div>}
                 </div>
               ) : isCameraOn ? (
@@ -2935,191 +2234,43 @@ function App() {
                     <div className="viewfinder-corner bl"></div>
                     <div className="viewfinder-corner br"></div>
                   </div>
-                  <div style={{ position: 'absolute', bottom: 140, left: 0, right: 0, display: 'flex', justifyContent: 'center', zIndex: 120 }}>
-                    <button onClick={capture} style={{ width: 80, height: 80, borderRadius: '50%', background: 'white', border: '6px solid rgba(255,255,255,0.3)', cursor: 'pointer', boxShadow: '0 4px 20px rgba(0,0,0,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                      <div style={{ width: 60, height: 60, borderRadius: '50%', background: 'white', border: '2px solid #333' }}></div>
-                    </button>
+                  <div className="shutter-layer">
+                    <button className="shutter-btn" onClick={capture}><div className="shutter-inner"></div></button>
                   </div>
                 </>
               ) : (
-                <div className="camera-off-overlay" style={{
-                  background: 'transparent',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  height: '100%',
-                  padding: 0,
-                  overflow: 'visible', /* Permette ombre */
-                  border: 'none',
-                  outline: 'none',
-                  boxShadow: 'none'
-                }}>
-                  {/* MAIN WHITE CARD CONTAINER - Home View */}
-                  <div className="home-main-card" style={{
-                    flex: 1,
-                    display: 'flex',
-                    flexDirection: 'column',
-                    background: 'white',
-                    borderRadius: 48,
-                    margin: '0 15px',
-                    padding: '20px 24px',
-                    position: 'relative',
-                    boxShadow: '0 15px 40px rgba(0, 0, 0, 0.08)',
-                    overflow: 'auto',
-                    maxHeight: 'calc(100vh - 220px)',
-                    marginBottom: 0,
-                    border: 'none',
-                    outline: 'none'
-                  }}>
-                    {/* Background Texture Topografica */}
-                    <div style={{ position: 'absolute', inset: 0, opacity: 0.04, pointerEvents: 'none', zIndex: 0 }}>
-                      <svg width="100%" height="100%" viewBox="0 0 400 600" preserveAspectRatio="none">
-                        <path d="M0,100 Q100,50 200,100 T400,100" fill="none" stroke="#2E7D32" strokeWidth="2" />
-                        <path d="M0,200 Q150,150 250,200 T400,180" fill="none" stroke="#2E7D32" strokeWidth="2" />
-                        <path d="M400,300 Q250,350 100,300 T0,350" fill="none" stroke="#2E7D32" strokeWidth="2" />
-                        <path d="M400,500 Q200,450 100,550 T0,500" fill="none" stroke="#2E7D32" strokeWidth="2" />
-                        <path d="M200,0 Q250,100 200,200" fill="none" stroke="#2E7D32" strokeWidth="2" />
-                      </svg>
-                    </div>
-
-                    {/* Palline Decorative Verdi Sfumate */}
-                    <div style={{ position: 'absolute', width: 80, height: 80, borderRadius: '50%', background: 'radial-gradient(circle, rgba(139, 195, 74, 0.4) 0%, rgba(139, 195, 74, 0) 70%)', top: '45%', right: '5%', zIndex: 1, filter: 'blur(20px)' }}></div>
-                    <div style={{ position: 'absolute', width: 60, height: 60, borderRadius: '50%', background: 'radial-gradient(circle, rgba(139, 195, 74, 0.3) 0%, rgba(139, 195, 74, 0) 70%)', bottom: '35%', left: '8%', zIndex: 1, filter: 'blur(15px)' }}></div>
-                    <div style={{ position: 'absolute', width: 40, height: 40, borderRadius: '50%', background: 'radial-gradient(circle, rgba(255, 235, 59, 0.5) 0%, rgba(255, 235, 59, 0) 70%)', top: '65%', left: '5%', zIndex: 1, filter: 'blur(10px)' }}></div>
-
-                    {/* Mirino Curvo Top-Left - Ridotto per mobile */}
-                    <svg width="40" height="40" viewBox="0 0 60 60" style={{ position: 'absolute', top: 20, left: 20, zIndex: 10 }}>
-                      <path d="M 5 55 Q 5 5 55 5" fill="none" stroke="#2E7D32" strokeWidth="4" strokeLinecap="round" />
-                    </svg>
-
-                    {/* Mirino Curvo Bottom-Right - Ridotto per mobile */}
-                    <svg width="40" height="40" viewBox="0 0 60 60" style={{ position: 'absolute', bottom: 20, right: 20, zIndex: 10 }}>
-                      <path d="M 55 5 Q 55 55 5 55" fill="none" stroke="#2E7D32" strokeWidth="4" strokeLinecap="round" />
-                    </svg>
-
-
-                    {/* Logo Centrale con Icona Foglia */}
-                    <div style={{ marginTop: 50, textAlign: 'center', marginBottom: 20, zIndex: 2 }}>
-                      {/* Icona Foglia Stilizzata (Simile a immagine) */}
-                      <div style={{ display: 'inline-block', marginBottom: 10 }}>
-                        <Sprout size={72} color="#33691E" strokeWidth={2.5} />
-                      </div>
-                      <h1 style={{ margin: 0, color: '#1B5E20', fontSize: '2.4rem', letterSpacing: '-0.03em', fontWeight: 800, fontFamily: 'sans-serif' }}>BIOEXPERT</h1>
-                    </div>
-
-                    {/* Box Curiosità Beige (Floating) */}
-                    <div style={{
-                      background: 'linear-gradient(135deg, #FFF8E1 0%, #FFECB3 100%)',
-                      borderRadius: 24,
-                      padding: '24px 20px',
-                      position: 'relative',
-                      marginBottom: 20,
-                      boxShadow: '0 15px 35px rgba(255, 236, 179, 0.8), 0 5px 15px rgba(255, 160, 0, 0.1)', /* Ombra calda */
-                      zIndex: 2,
-                      border: 'none', /* RIMOSSO BORDO BIANCO */
-                      outline: 'none'
-                    }}>
-                      {/* Decorazione Orchidea Outline (Left) */}
-                      <div style={{ position: 'absolute', left: -10, bottom: -10, opacity: 0.15, transform: 'rotate(-10deg)' }}>
-                        <Flower2 size={100} color="#E65100" strokeWidth={0.8} />
-                      </div>
-                      {/* Decorazione Ape Outline (Right) */}
-                      <div style={{ position: 'absolute', right: 5, top: 5, opacity: 0.2 }}>
-                        <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#E65100" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M8 12a4 4 0 1 1 8 0" /><path d="M12 7V3" /><path d="M9 4.5 10.5 6" /><path d="M15 4.5 13.5 6" /><path d="M20 12h-2" /><path d="M6 12H4" /><path d="M4 16c1 .5 2 .5 2 0" /><path d="M20 16c-1 .5-2 .5-2 0" /></svg>
-                      </div>
-
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, marginBottom: 8, color: '#333', fontWeight: 900, fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
-                        <Sparkles size={14} fill="#333" /> LO SAPEVI CHE?
-                      </div>
-                      <p style={{ margin: 0, fontSize: '1rem', lineHeight: 1.4, color: '#3E2723', fontStyle: 'italic', fontWeight: 600, textAlign: 'center', fontFamily: 'serif' }}>
-                        "{currentTip}"
-                      </p>
-                    </div>
-
-                    {/* Refresh Button (Pillola Bianca Pulita) */}
-                    <button
-                      onClick={() => setCurrentTip(BIO_TIPS[Math.floor(Math.random() * BIO_TIPS.length)])}
-                      style={{
-                        margin: '0 auto',
-                        background: 'white',
-                        border: '1px solid #A5D6A7',
-                        color: '#2E7D32',
-                        padding: '10px 24px',
-                        borderRadius: 100,
-                        cursor: 'pointer',
-                        fontSize: '0.8rem',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 8,
-                        fontWeight: 700,
-                        boxShadow: '0 4px 12px rgba(46, 125, 50, 0.1)', /* Ombra verde */
-                        transition: 'all 0.2s',
-                        zIndex: 2,
-                        marginBottom: 'auto', /* Spinge i bottoni in fondo alla card */
-                        outline: 'none'
-                      }}
-                    >
-                      <RefreshCw size={14} /> Altra curiosità
-                    </button>
-
-                    {/* GLOSSY ACTION BUTTONS */}
-                    <div style={{
-                      marginTop: 20,
-                      display: 'flex',
-                      gap: 24,
-                      justifyContent: 'center',
-                      alignItems: 'center',
-                      paddingBottom: 100,
-                      zIndex: 2
-                    }}>
-                      {/* Camera Button: GLOSSY DEEP GREEN */}
-                      <button
-                        onClick={() => setIsCameraOn(true)}
-                        style={{
-                          width: 140,
-                          height: 140,
-                          borderRadius: '50%',
-                          /* Gradiente complesso per effetto sferico/glossy */
-                          background: 'radial-gradient(circle at 30% 30%, rgba(255,255,255,0.25) 0%, rgba(255,255,255,0) 40%), linear-gradient(145deg, #2E7D32 0%, #1B5E20 100%)',
-                          border: 'none',
-                          outline: 'none',
-                          color: 'white',
-                          boxShadow: '0 20px 40px rgba(27, 94, 32, 0.4), inset 0 2px 4px rgba(255,255,255,0.3)',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          cursor: 'pointer',
-                          position: 'relative',
-                          overflow: 'hidden'
-                        }}
-                      >
-                        <Camera size={64} strokeWidth={2.5} />
-                      </button>
-
-                      {/* Gallery Button: GLOSSY LIME/YELLOW */}
-                      <button
-                        onClick={() => fileInputRef.current?.click()}
-                        style={{
-                          width: 140,
-                          height: 140,
-                          borderRadius: '50%',
-                          /* Gradiente Giallo/Lime Glossy */
-                          background: 'radial-gradient(circle at 30% 30%, rgba(255,255,255,0.6) 0%, rgba(255,255,255,0) 40%), linear-gradient(145deg, #E6EE9C 0%, #9CCC65 100%)',
-                          border: 'none',
-                          outline: 'none',
-                          color: '#1B5E20', /* Icona Verde Scuro su sfondo chiaro */
-                          boxShadow: '0 20px 40px rgba(139, 195, 74, 0.4), inset 0 2px 4px rgba(255,255,255,0.8)',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          cursor: 'pointer',
-                          position: 'relative',
-                          overflow: 'hidden'
-                        }}
-                      >
-                        <Upload size={64} strokeWidth={2.5} />
-                      </button>
-                    </div>
+                <div className="camera-off-overlay">
+                  <div className="logo-off-center">
+                    <Sprout size={64} />
+                    <h2>BIOEXPERT</h2>
                   </div>
+
+                  <div style={{ margin: '32px 24px', padding: '20px', background: 'rgba(255,255,255,0.6)', borderRadius: 24, border: '1px solid rgba(0,0,0,0.05)', textAlign: 'center' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, marginBottom: 8, color: 'var(--primary)', fontWeight: 700, fontSize: '0.8rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                      <Sparkles size={14} /> Lo Sapevi Che?
+                    </div>
+                    <p style={{ margin: 0, fontSize: '0.9rem', lineHeight: 1.5, opacity: 0.8, fontStyle: 'italic' }}>
+                      "{currentTip}"
+                    </p>
+                  </div>
+
+                  <h3 style={{ margin: 0, color: 'var(--primary)', fontWeight: 800, opacity: 0.5, fontSize: '0.9rem' }}>Fotocamera in Standby</h3>
+                  <button onClick={() => setIsCameraOn(true)} style={{ background: 'var(--primary)', color: 'white', border: 'none', padding: '16px 32px', borderRadius: 100, fontWeight: 800, marginTop: 16, cursor: 'pointer', fontSize: '1rem', boxShadow: '0 8px 20px rgba(46, 125, 50, 0.25)', display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <Camera size={20} /> ATTIVA FOTOCAMERA
+                  </button>
+                  {!activeGame && (
+                    <button onClick={() => fileInputRef.current?.click()} style={{ background: 'var(--white)', color: 'var(--primary)', border: '2px solid var(--primary)', padding: '12px 24px', borderRadius: 100, fontWeight: 800, marginTop: 12, cursor: 'pointer', fontSize: '0.9rem', display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <Upload size={18} /> CARICA DA GALLERIA
+                    </button>
+                  )}
+                  {activeGame && (
+                    <div style={{ background: '#f5f5f5', color: 'var(--text-muted)', border: '2px solid #e0e0e0', padding: '12px 24px', borderRadius: 100, fontWeight: 800, marginTop: 12, fontSize: '0.9rem', display: 'flex', alignItems: 'center', gap: 8, opacity: 0.5 }}>
+                      <Upload size={18} /> GALLERIA DISABILITATA IN SFIDA
+                    </div>
+                  )}
+                  <button onClick={() => setCurrentTip(BIO_TIPS[Math.floor(Math.random() * BIO_TIPS.length)])} style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', marginTop: 20, cursor: 'pointer', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: 6, opacity: 0.6 }}>
+                    <RefreshCw size={12} /> Altra curiosità
+                  </button>
                 </div>
               )}
             </div>
@@ -3167,38 +2318,7 @@ function App() {
                     )}
                   </div>
                 ) : (
-                  <div key={i} className={`msg msg-${m.role}`}>
-                    {m.role === 'bot' ? (
-                      <div style={{ lineHeight: '1.5', fontSize: '0.95rem' }}>
-                        {m.text?.split('\n').map((line, idx) => {
-                          // Gestione base liste e grassetto
-                          if (line.trim().startsWith('- ')) {
-                            return (
-                              <div key={idx} style={{ display: 'flex', gap: 6, marginBottom: 4, marginLeft: 8 }}>
-                                <span style={{ color: '#2E7D32', fontWeight: 'bold' }}>•</span>
-                                <div>
-                                  {line.substring(2).split(/(\*\*.*?\*\*)/).map((part, pIdx) =>
-                                    part.startsWith('**') && part.endsWith('**') ?
-                                      <strong key={pIdx} style={{ color: '#1B5E20' }}>{part.slice(2, -2)}</strong> : part
-                                  )}
-                                </div>
-                              </div>
-                            );
-                          }
-                          return (
-                            <div key={idx} style={{ marginBottom: line.trim() ? 8 : 0 }}>
-                              {line.split(/(\*\*.*?\*\*)/).map((part, pIdx) =>
-                                part.startsWith('**') && part.endsWith('**') ?
-                                  <strong key={pIdx} style={{ color: '#1B5E20' }}>{part.slice(2, -2)}</strong> : part
-                              )}
-                            </div>
-                          );
-                        })}
-                      </div>
-                    ) : (
-                      m.text
-                    )}
-                  </div>
+                  <div key={i} className={`msg msg-${m.role}`}>{m.text}</div>
                 )
               ))}
               {isChatLoading && <div className="msg msg-bot" style={{ opacity: 0.5 }}><RefreshCw size={14} className="spin" /> Sto pensando...</div>}
@@ -3206,378 +2326,50 @@ function App() {
           )}
         </div>
 
-        {
-          activeMode === 'chat' && (
-            <>
-              <div className="quick-replies-container">
-                {quickReplies.map((q, idx) => (
-                  <button key={idx} className="quick-reply-chip" onClick={() => sendMessage(q)}>
-                    <HelpCircle size={14} /> {q}
-                  </button>
-                ))}
-              </div>
-              <div className="chat-input-row" style={{ marginBottom: 120 }}>
-                <input className="input-field" placeholder="Chiedi a BioExpert..." value={chatInput} onChange={e => setChatInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && sendMessage()} />
-                <button className="btn-header-icon" style={{ background: 'var(--primary)', color: 'white', width: 44, height: 44 }} onClick={() => sendMessage()}><Send size={18} /></button>
-              </div>
-            </>
-          )
-        }
-      </div >
-
-      {/* PLANT DETAIL PAGE - Full Screen Modal */}
-      {fullScreenAnalysis && (
-        <div style={{
-          position: 'fixed',
-          inset: 0,
-          background: 'white',
-          zIndex: 2000,
-          overflow: 'auto',
-          display: 'flex',
-          flexDirection: 'column'
-        }}>
-          {/* Header Verde */}
-          <div style={{
-            background: 'linear-gradient(135deg, #2E7D32 0%, #1B5E20 100%)',
-            padding: '16px 20px',
-            color: 'white',
-            display: 'flex',
-            alignItems: 'center',
-            gap: 12
-          }}>
-            <button onClick={() => setFullScreenAnalysis(null)} style={{
-              background: 'rgba(255,255,255,0.2)',
-              border: 'none',
-              borderRadius: '50%',
-              width: 40,
-              height: 40,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              cursor: 'pointer',
-              color: 'white'
-            }}>
-              <ChevronLeft size={24} />
-            </button>
-            <div style={{ flex: 1 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                <Sprout size={24} />
-                <h2 style={{ margin: 0, fontSize: '1.3rem', fontWeight: 800 }}>{fullScreenAnalysis.name}</h2>
-              </div>
-              <div style={{ fontSize: '0.85rem', opacity: 0.9, fontStyle: 'italic' }}>{fullScreenAnalysis.scientificName}</div>
+        {activeMode === 'chat' && (
+          <>
+            <div className="quick-replies-container">
+              {quickReplies.map((q, idx) => (
+                <button key={idx} className="quick-reply-chip" onClick={() => sendMessage(q)}>
+                  <HelpCircle size={14} /> {q}
+                </button>
+              ))}
             </div>
-            {/* Campanella Notifiche */}
-            <button onClick={() => {
-              setNotificationsEnabled(!notificationsEnabled);
-            }} style={{
-              background: notificationsEnabled ? 'rgba(255, 215, 0, 0.3)' : 'rgba(255,255,255,0.2)',
-              border: 'none',
-              borderRadius: '50%',
-              width: 40,
-              height: 40,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              cursor: 'pointer',
-              color: notificationsEnabled ? '#FFD700' : 'white'
-            }}>
-              <Bell size={20} />
-            </button>
-          </div>
-
-          {/* Foto Pianta */}
-          <div style={{ position: 'relative', height: 300, background: '#f5f5f5' }}>
-            <img
-              src={fullScreenAnalysis.image || 'https://placehold.co/600x400?text=Pianta'}
-              style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-            />
-            <div style={{
-              position: 'absolute',
-              top: 16,
-              right: 16,
-              background: fullScreenAnalysis.healthStatus === 'sick' ? '#ffebee' : '#e8f5e9',
-              padding: '8px 16px',
-              borderRadius: 20,
-              fontSize: '0.8rem',
-              fontWeight: 800,
-              color: fullScreenAnalysis.healthStatus === 'sick' ? '#d32f2f' : '#2e7d32',
-              boxShadow: '0 4px 12px rgba(0,0,0,0.1)'
-            }}>
-              {fullScreenAnalysis.healthStatus === 'sick' ? 'MALATA' : 'SANA'}
+            <div className="chat-input-row">
+              <input className="input-field" placeholder="Chiedi a BioExpert..." value={chatInput} onChange={e => setChatInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && sendMessage()} />
+              <button className="btn-header-icon" style={{ background: 'var(--primary)', color: 'white', width: 44, height: 44 }} onClick={() => sendMessage()}><Send size={18} /></button>
             </div>
-          </div>
+          </>
+        )}
+      </div>
 
-          {/* Tab Navigation */}
-          <div style={{
-            display: 'flex',
-            gap: 8,
-            padding: '16px 20px',
-            borderBottom: '1px solid #e0e0e0'
-          }}>
-            {['INFO', 'CURA'].map((tab) => (
-              <button
-                key={tab}
-                onClick={() => setDetailTab(tab.toLowerCase() as any)}
-                style={{
-                  flex: 1,
-                  padding: '12px',
-                  background: detailTab === tab.toLowerCase() ? '#2E7D32' : 'transparent',
-                  color: detailTab === tab.toLowerCase() ? 'white' : '#666',
-                  border: detailTab === tab.toLowerCase() ? 'none' : '1px solid #e0e0e0',
-                  borderRadius: 12,
-                  fontWeight: 800,
-                  fontSize: '0.85rem',
-                  cursor: 'pointer',
-                  transition: 'all 0.2s'
-                }}
-              >
-                {tab}
-              </button>
-            ))}
-          </div>
-
-          {/* Content Area */}
-          <div style={{ flex: 1, padding: '20px', paddingBottom: 20, overflow: 'auto' }}>
-            {detailTab === 'info' && (
-              <>
-                {/* Diagnosi */}
-                <div style={{ marginBottom: 24 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12, color: '#2E7D32' }}>
-                    <ShieldCheck size={20} />
-                    <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 800 }}>Diagnosi</h3>
-                  </div>
-                  <p style={{ margin: 0, color: '#666', lineHeight: 1.6 }}>{fullScreenAnalysis.diagnosis}</p>
-                </div>
-
-                {/* Consigli Rapidi */}
-                <div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16, color: '#d32f2f' }}>
-                    <Heart size={20} />
-                    <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 800 }}>Consigli Rapidi</h3>
-                  </div>
-
-                  {/* Irrigazione */}
-                  <div style={{
-                    background: 'linear-gradient(135deg, #E8F5E9 0%, #C8E6C9 100%)',
-                    borderRadius: 16,
-                    padding: '16px',
-                    marginBottom: 12
-                  }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, color: '#1B5E20' }}>
-                      <Droplets size={18} />
-                      <strong style={{ fontSize: '0.9rem' }}>Irrigazione</strong>
-                    </div>
-                    <p style={{ margin: 0, fontSize: '0.85rem', color: '#2E7D32' }}>{fullScreenAnalysis.care?.watering}</p>
-                  </div>
-
-                  {/* Esposizione */}
-                  <div style={{
-                    background: 'linear-gradient(135deg, #FFF8E1 0%, #FFECB3 100%)',
-                    borderRadius: 16,
-                    padding: '16px',
-                    marginBottom: 12
-                  }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, color: '#E65100' }}>
-                      <Sun size={18} />
-                      <strong style={{ fontSize: '0.9rem' }}>Esposizione</strong>
-                    </div>
-                    <p style={{ margin: 0, fontSize: '0.85rem', color: '#F57C00' }}>{fullScreenAnalysis.care?.general}</p>
-                  </div>
-
-                  {/* Potatura */}
-                  <div style={{
-                    background: 'linear-gradient(135deg, #E8F5E9 0%, #C8E6C9 100%)',
-                    borderRadius: 16,
-                    padding: '16px',
-                    marginBottom: 12
-                  }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, color: '#1B5E20' }}>
-                      <Scissors size={18} />
-                      <strong style={{ fontSize: '0.9rem' }}>Potatura</strong>
-                    </div>
-                    <p style={{ margin: 0, fontSize: '0.85rem', color: '#2E7D32' }}>{fullScreenAnalysis.care?.pruning}</p>
-                  </div>
-
-                  {/* Rinvaso */}
-                  <div style={{
-                    background: 'linear-gradient(135deg, #E8F5E9 0%, #C8E6C9 100%)',
-                    borderRadius: 16,
-                    padding: '16px'
-                  }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, color: '#1B5E20' }}>
-                      <Package size={18} />
-                      <strong style={{ fontSize: '0.9rem' }}>Rinvaso</strong>
-                    </div>
-                    <p style={{ margin: 0, fontSize: '0.85rem', color: '#2E7D32' }}>{fullScreenAnalysis.care?.repotting}</p>
-                  </div>
-
-                  {/* Luxometro */}
-                  {lightLevel !== null && (
-                    <div style={{
-                      background: 'linear-gradient(135deg, #FFF8E1 0%, #FFECB3 100%)',
-                      borderRadius: 16,
-                      padding: '16px',
-                      marginTop: 12
-                    }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, color: '#E65100' }}>
-                        <Sun size={18} />
-                        <strong style={{ fontSize: '0.9rem' }}>Luce Ambiente</strong>
-                      </div>
-                      <p style={{ margin: 0, fontSize: '1.2rem', fontWeight: 800, color: '#F57C00' }}>
-                        {lightLevel.toFixed(0)} lux
-                      </p>
-                      <p style={{ margin: '4px 0 0 0', fontSize: '0.75rem', color: '#666' }}>
-                        {lightLevel < 100 ? '🌑 Molto buio' : lightLevel < 500 ? '🌙 Ombra' : lightLevel < 1000 ? '☁️ Luce indiretta' : lightLevel < 5000 ? '⛅ Luminoso' : '☀️ Pieno sole'}
-                      </p>
-                    </div>
-                  )}
-                </div>
-              </>
-            )}
-
-            {detailTab === 'cura' && (
-              <div style={{ textAlign: 'center', padding: 40, color: '#999' }}>
-                <Calendar size={48} style={{ opacity: 0.3, marginBottom: 16 }} />
-                <p>Piano di cura in arrivo...</p>
-              </div>
-            )}
-
-            {detailTab === 'album' && (
-              <div style={{ textAlign: 'center', padding: 40, color: '#999' }}>
-                <ImageIcon size={48} style={{ opacity: 0.3, marginBottom: 16 }} />
-                <p>Album foto in arrivo...</p>
-              </div>
-            )}
-          </div>
-
-          {/* Pulsante RIMUOVI Fluttuante */}
-          <button
-            onClick={() => {
-              setConfirmToast({
-                message: '🗑️ Vuoi davvero rimuovere questa pianta dal giardino?',
-                onConfirm: async () => {
-                  try {
-                    if (fullScreenAnalysis.id) {
-                      await deleteUserPlant(fullScreenAnalysis.id);
-                      showToast('✅ Pianta rimossa dal giardino', 'success');
-                      setFullScreenAnalysis(null);
-                      // Refresh plant list
-                      const plants = await fetchUserPlants();
-                      setUserPlants(plants);
-                    }
-                  } catch (error) {
-                    showToast('❌ Errore durante la rimozione', 'error');
-                  }
-                  setConfirmToast(null);
-                },
-                onCancel: () => setConfirmToast(null)
-              });
-            }}
-            style={{
-              position: 'fixed',
-              bottom: 120,
-              right: 20,
-              width: 60,
-              height: 60,
-              borderRadius: '50%',
-              background: 'linear-gradient(135deg, #EF5350 0%, #E53935 100%)',
-              color: 'white',
-              border: 'none',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              cursor: 'pointer',
-              boxShadow: '0 6px 20px rgba(244, 67, 54, 0.4)',
-              zIndex: 2001,
-              transition: 'all 0.3s'
-            }}
-          >
-            <Trash2 size={24} />
-          </button>
-        </div>
-      )}
-
-      {/* BOTTOM NAVIGATION BAR (Fixed Dock) */}
-      < div style={{
-        position: 'fixed',
-        bottom: 20,
-        left: 20,
-        right: 20,
-        height: 80,
-        background: 'rgba(255,255,255,0.9)',
-        backdropFilter: 'blur(20px)',
-        borderRadius: 24,
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-around',
-        boxShadow: '0 10px 30px rgba(0,0,0,0.1)',
-        zIndex: 1000,
-        border: '1px solid rgba(255,255,255,0.5)'
-      }
-      }>
-        {/* HOME Button */}
-        < button
-          onClick={() => { setActiveMode('scan'); setIsCameraOn(false); }}
-          style={{
-            background: 'transparent',
-            border: 'none',
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            gap: 6,
-            padding: 10,
-            cursor: 'pointer',
-            opacity: activeMode === 'scan' ? 1 : 0.5,
-            transform: activeMode === 'scan' ? 'translateY(-2px)' : 'none',
-            transition: 'all 0.2s'
-          }}
-        >
-          <Home size={28} color="#1B5E20" strokeWidth={activeMode === 'scan' ? 2.5 : 2} />
-          <span style={{ fontSize: 10, fontWeight: 800, color: '#1B5E20' }}>HOME</span>
-        </button >
-
-        {/* GARDEN Button */}
-        < button
-          onClick={() => setActiveMode('garden')}
-          style={{
-            background: 'transparent',
-            border: 'none',
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            gap: 6,
-            padding: 10,
-            cursor: 'pointer',
-            opacity: activeMode === 'garden' ? 1 : 0.5,
-            transform: activeMode === 'garden' ? 'translateY(-2px)' : 'none',
-            transition: 'all 0.2s'
-          }}
-        >
-          <Sprout size={28} color="#1B5E20" strokeWidth={activeMode === 'garden' ? 2.5 : 2} />
-          <span style={{ fontSize: 10, fontWeight: 800, color: '#1B5E20' }}>GIARDINO</span>
-        </button >
-
-        {/* CHAT Button */}
-        < button
-          onClick={() => setActiveMode('chat')}
-          style={{
-            background: 'transparent',
-            border: 'none',
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            gap: 6,
-            padding: 10,
-            cursor: 'pointer',
-            opacity: activeMode === 'chat' ? 1 : 0.5,
-            transform: activeMode === 'chat' ? 'translateY(-2px)' : 'none',
-            transition: 'all 0.2s'
-          }}
-        >
-          <MessageSquare size={28} color="#1B5E20" strokeWidth={activeMode === 'chat' ? 2.5 : 2} />
-          <span style={{ fontSize: 10, fontWeight: 800, color: '#1B5E20' }}>CHAT</span>
-        </button >
-      </div >
+      <div className="action-dashboard" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10, padding: '10px 10px 40px 10px' }}>
+        <button className="btn-3d" onClick={() => {
+          if (activeMode === 'scan' && isCameraOn) {
+            setIsCameraOn(false);
+          } else {
+            setActiveMode('scan');
+            setIsCameraOn(false);
+          }
+        }} style={{ flexDirection: 'column', gap: 4, height: 'auto', padding: 10, background: activeMode === 'scan' ? 'var(--white)' : '#f0f0f0' }}>
+          {activeMode === 'scan' && isCameraOn ? (
+            <CameraOff size={24} color="var(--danger)" />
+          ) : (
+            <Home size={24} color={activeMode === 'scan' ? 'var(--primary)' : '#999'} />
+          )}
+          <span style={{ fontSize: '0.7rem', color: activeMode === 'scan' && isCameraOn ? 'var(--danger)' : activeMode === 'scan' ? 'var(--primary)' : '#999' }}>
+            {activeMode === 'scan' && isCameraOn ? 'STOP' : 'HOME'}
+          </span>
+        </button>
+        <button className="btn-3d" onClick={() => setActiveMode('garden')} style={{ flexDirection: 'column', gap: 4, height: 'auto', padding: 10, background: activeMode === 'garden' ? 'var(--white)' : '#f0f0f0' }}>
+          <Sprout size={24} color={activeMode === 'garden' ? 'var(--primary)' : '#999'} />
+          <span style={{ fontSize: '0.7rem', color: activeMode === 'garden' ? 'var(--primary)' : '#999' }}>GIARDINO</span>
+        </button>
+        <button className="btn-3d" onClick={() => setActiveMode('chat')} style={{ flexDirection: 'column', gap: 4, height: 'auto', padding: 10, background: activeMode === 'chat' ? 'var(--white)' : '#f0f0f0' }}>
+          <MessageSquare size={24} color={activeMode === 'chat' ? 'var(--primary)' : '#999'} />
+          <span style={{ fontSize: '0.7rem', color: activeMode === 'chat' ? 'var(--primary)' : '#999' }}>CHAT</span>
+        </button>
+      </div>
 
       <input type="file" ref={fileInputRef} hidden accept="image/*" onChange={handleFileUpload} />
 
@@ -4539,358 +3331,110 @@ function App() {
                     </div>
                   </div>
                 </>
-              ) : detailTab === 'care' ? (
+              ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
 
-                  {/* Sistema di Cura Progressivo */}
-                  {activeCareProgram && activeCareProgram.program ? (
-                    // Dashboard Programma Attivo
-                    <div style={{
-                      padding: 24,
-                      background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-                      borderRadius: 24,
-                      boxShadow: '0 10px 40px rgba(102, 126, 234, 0.3)',
-                      color: 'white'
-                    }}>
-
-                      {/* Progress Ring */}
-                      <div style={{ textAlign: 'center', marginBottom: 24 }}>
-                        <div style={{
-                          width: 140,
-                          height: 140,
-                          margin: '0 auto',
-                          borderRadius: '50%',
-                          background: `conic-gradient(#FFD700 ${activeCareProgram.program.completionPercentage || 0}%, rgba(255,255,255,0.2) 0)`,
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          position: 'relative',
-                          boxShadow: '0 8px 32px rgba(0,0,0,0.2)'
-                        }}>
-                          <div style={{
-                            width: 110,
-                            height: 110,
-                            borderRadius: '50%',
-                            background: 'rgba(255,255,255,0.95)',
-                            display: 'flex',
-                            flexDirection: 'column',
-                            alignItems: 'center',
-                            justifyContent: 'center'
-                          }}>
-                            <div style={{ fontSize: '2.2rem', fontWeight: 900, color: '#667eea' }}>
-                              {activeCareProgram.program.completionPercentage || 0}%
-                            </div>
-                            <div style={{ fontSize: '0.7rem', opacity: 0.6, color: '#333' }}>Completato</div>
-                          </div>
-                        </div>
-                        <div style={{ marginTop: 16, fontSize: '1.1rem', fontWeight: 800, textShadow: '0 2px 4px rgba(0,0,0,0.2)' }}>
-                          🌿 Fase {activeCareProgram.program.current_phase} di {activeCareProgram.program.total_phases}
-                        </div>
-                        <div style={{ fontSize: '0.9rem', opacity: 0.9, marginTop: 4 }}>
-                          {activeCareProgram.currentPhase?.title || 'Caricamento...'}
-                        </div>
-                      </div>
-
-                      {/* Fase Corrente Card */}
-                      {activeCareProgram.currentPhase && (
-                        <div style={{
-                          background: 'rgba(255,255,255,0.15)',
-                          backdropFilter: 'blur(10px)',
-                          padding: 20,
-                          borderRadius: 20,
-                          marginBottom: 20,
-                          border: '1px solid rgba(255,255,255,0.2)'
-                        }}>
-                          <div style={{ fontWeight: 800, fontSize: '1rem', marginBottom: 8 }}>
-                            {activeCareProgram.currentPhase.title}
-                          </div>
-                          <div style={{ fontSize: '0.85rem', opacity: 0.9, lineHeight: 1.5 }}>
-                            {activeCareProgram.currentPhase.description}
-                          </div>
-                          <div style={{ fontSize: '0.75rem', marginTop: 12, opacity: 0.8 }}>
-                            ⏱️ Durata: {activeCareProgram.currentPhase.duration_days} giorni
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Azioni Checklist */}
-                      <div style={{ marginBottom: 20 }}>
-                        <h4 style={{ fontSize: '0.85rem', marginBottom: 12, opacity: 0.9, letterSpacing: '1px' }}>AZIONI DA COMPLETARE</h4>
-                        {activeCareProgram.currentPhase?.actions?.map((action: any, idx: number) => (
-                          <div key={idx} style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: 12,
-                            padding: 14,
-                            background: 'rgba(255,255,255,0.1)',
-                            backdropFilter: 'blur(10px)',
-                            borderRadius: 16,
-                            marginBottom: 10,
-                            border: '1px solid rgba(255,255,255,0.15)'
-                          }}>
-                            <div style={{ fontSize: '1.4rem' }}>
-                              {action.type === 'water' ? '💧' :
-                                action.type === 'fertilize' ? '🌱' :
-                                  action.type === 'prune' ? '✂️' :
-                                    action.type === 'photo_check' ? '📸' : '✅'}
-                            </div>
-                            <div style={{ flex: 1 }}>
-                              <div style={{ fontSize: '0.9rem', fontWeight: 700 }}>{action.title}</div>
-                              <div style={{ fontSize: '0.75rem', opacity: 0.8 }}>
-                                {action.frequency === 'daily' ? 'Quotidiano' :
-                                  action.frequency === 'weekly' ? 'Settimanale' :
-                                    action.frequency === 'every_2_days' ? 'Ogni 2 giorni' :
-                                      action.frequency === 'every_3_days' ? 'Ogni 3 giorni' : 'Al bisogno'}
-                              </div>
-                            </div>
-                            <div style={{ fontSize: '0.8rem', fontWeight: 700, opacity: 0.7 }}>
-                              {action.completed || 0}/{action.total}
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-
-                      {/* Prossimo Checkpoint */}
-                      {activeCareProgram.nextCheckpoint && (
-                        <div style={{
-                          background: 'rgba(255, 215, 0, 0.2)',
-                          backdropFilter: 'blur(10px)',
-                          padding: 16,
-                          borderRadius: 16,
-                          marginBottom: 16,
-                          border: '2px dashed rgba(255, 215, 0, 0.5)'
-                        }}>
-                          <div style={{ fontSize: '0.85rem', fontWeight: 700, marginBottom: 4 }}>
-                            📅 PROSSIMO CHECK FOTOGRAFICO
-                          </div>
-                          <div style={{ fontSize: '0.8rem', opacity: 0.9 }}>
-                            {new Date(activeCareProgram.nextCheckpoint.scheduled_date).toLocaleDateString('it-IT', {
-                              day: 'numeric',
-                              month: 'long',
-                              year: 'numeric'
-                            })}
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Bottone Check Foto */}
-                      <button
-                        onClick={() => {
-                          setIsCheckpointMode(true);
-                          setCurrentCheckpoint(activeCareProgram.nextCheckpoint);
-                          setActiveMode('scan');
-                          setIsCameraOn(true);
-                        }}
-                        style={{
-                          width: '100%',
-                          background: 'linear-gradient(135deg, #FFD700 0%, #FFA500 100%)',
-                          color: '#333',
-                          border: 'none',
-                          padding: '18px',
-                          borderRadius: 100,
-                          fontWeight: 900,
-                          fontSize: '1.05rem',
-                          cursor: 'pointer',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          gap: 12,
-                          boxShadow: '0 6px 20px rgba(255, 215, 0, 0.4)',
-                          transition: 'transform 0.2s',
-                          textTransform: 'uppercase',
-                          letterSpacing: '1px'
-                        }}
-                        onMouseDown={(e) => e.currentTarget.style.transform = 'scale(0.95)'}
-                        onMouseUp={(e) => e.currentTarget.style.transform = 'scale(1)'}
-                      >
-                        <Camera size={22} /> FAI CHECK FOTO
-                      </button>
-
-                      {/* Statistiche */}
-                      <div style={{
-                        marginTop: 24,
-                        padding: 20,
-                        background: 'rgba(255,255,255,0.1)',
-                        backdropFilter: 'blur(10px)',
-                        borderRadius: 20,
-                        display: 'grid',
-                        gridTemplateColumns: '1fr 1fr 1fr',
-                        gap: 16,
-                        textAlign: 'center',
-                        border: '1px solid rgba(255,255,255,0.15)'
-                      }}>
-                        <div>
-                          <div style={{ fontSize: '1.6rem', fontWeight: 900, color: '#FFD700' }}>
-                            {activeCareProgram.stats?.healthImprovement > 0 ? '+' : ''}{activeCareProgram.stats?.healthImprovement || 0}%
-                          </div>
-                          <div style={{ fontSize: '0.7rem', opacity: 0.8, marginTop: 4 }}>Salute</div>
-                        </div>
-                        <div>
-                          <div style={{ fontSize: '1.6rem', fontWeight: 900, color: '#FFD700' }}>
-                            {activeCareProgram.stats?.completedCheckpoints || 0}/{activeCareProgram.stats?.totalCheckpoints || 0}
-                          </div>
-                          <div style={{ fontSize: '0.7rem', opacity: 0.8, marginTop: 4 }}>Checkpoint</div>
-                        </div>
-                        <div>
-                          <div style={{ fontSize: '1.6rem', fontWeight: 900, color: '#FFD700' }}>
-                            {activeCareProgram.stats?.daysActive || 0}
-                          </div>
-                          <div style={{ fontSize: '0.7rem', opacity: 0.8, marginTop: 4 }}>Giorni</div>
-                        </div>
-                      </div>
-
-                    </div>
-                  ) : (
-                    // Nessun Programma - Mostra Pulsante Avvio
-                    <div style={{
-                      padding: 32,
-                      background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-                      borderRadius: 24,
-                      boxShadow: '0 10px 40px rgba(102, 126, 234, 0.3)',
-                      textAlign: 'center',
-                      color: 'white'
-                    }}>
-                      <div style={{ fontSize: '4rem', marginBottom: 16 }}>🌱</div>
-                      <h3 style={{ marginTop: 0, marginBottom: 12, fontSize: '1.4rem', fontWeight: 900 }}>
-                        Programma di Cura Personalizzato
-                      </h3>
-                      <p style={{ opacity: 0.9, fontSize: '0.95rem', lineHeight: 1.6, marginBottom: 24, maxWidth: '400px', margin: '0 auto 24px' }}>
-                        Avvia un programma di cura guidato con checkpoint fotografici, luxometro integrato e tracking del progresso.
-                      </p>
-                      <button
-                        onClick={async () => {
-                          if (!username || !fullScreenAnalysis) return;
-
-                          setAchievementToast('📸 Scatta una foto iniziale per iniziare...');
-                          setIsCheckpointMode(true);
-                          setActiveMode('scan');
-                          setIsCameraOn(true);
-                        }}
-                        style={{
-                          background: 'linear-gradient(135deg, #FFD700 0%, #FFA500 100%)',
-                          color: '#333',
-                          border: 'none',
-                          padding: '16px 32px',
-                          borderRadius: 100,
-                          fontWeight: 900,
-                          cursor: 'pointer',
-                          fontSize: '1rem',
-                          boxShadow: '0 6px 20px rgba(255, 215, 0, 0.4)',
-                          textTransform: 'uppercase',
-                          letterSpacing: '1px'
-                        }}
-                      >
-                        🚀 AVVIA PROGRAMMA DI RECUPERO
-                      </button>
-                    </div>
-                  )}
-
-
+                  {/* Azioni Rapide */}
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                    <button onClick={() => registerAction('watering')} style={{ background: '#E3F2FD', color: '#1976D2', border: 'none', padding: 16, borderRadius: 20, fontWeight: 800, cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
+                      <Droplets size={24} /> IRRIGA
+                    </button>
+                    <button onClick={() => photoInputRef.current?.click()} style={{ background: '#F3E5F5', color: '#7B1FA2', border: 'none', padding: 16, borderRadius: 20, fontWeight: 800, cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
+                      <Camera size={24} /> CHECK FOTO
+                    </button>
+                    <input type="file" ref={photoInputRef} style={{ display: 'none' }} accept="image/*" capture="environment" onChange={handleChronicPhoto} />
+                  </div>
 
                   {/* Storico Recente */}
                   <div style={{ padding: 20, background: 'var(--white)', borderRadius: 28, border: '1px solid var(--card-border)' }}>
                     <h3 style={{ marginTop: 0, fontSize: '1rem', display: 'flex', alignItems: 'center', gap: 8 }}><History size={18} color="var(--primary)" /> Storico Cure</h3>
                     {isLoadingHistory ? <div className="spin" style={{ margin: '20px auto' }} /> : (
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                        {careHistory.length === 0 ? <p style={{ opacity: 0.5, fontSize: '0.85rem' }}>Nessuna azione registrata.</p> : careHistory.slice(0, 5).map((ev: any) => (
+                        {careHistory.length === 0 ? <p style={{ opacity: 0.5, fontSize: '0.85rem' }}>Nessuna azione registrata.</p> : careHistory.slice(0, 3).map((ev: any) => (
                           <div key={ev.id} style={{ display: 'flex', alignItems: 'center', gap: 12, paddingBottom: 8, borderBottom: '1px solid #f5f5f5' }}>
                             <div style={{ width: 8, height: 8, borderRadius: '50%', background: ev.event_type === 'watering' ? '#1976D2' : '#7B1FA2' }} />
                             <div style={{ flex: 1 }}>
                               <div style={{ fontWeight: 700, fontSize: '0.85rem' }}>{ev.event_type === 'watering' ? 'Irrigazione' : 'Controllo'}</div>
                               <div style={{ fontSize: '0.7rem', opacity: 0.5 }}>{new Date(ev.created_at).toLocaleString()}</div>
                             </div>
-                            <button
-                              onClick={async (e) => {
-                                e.stopPropagation();
-                                if (confirm("Vuoi eliminare questa registrazione?")) {
-                                  await deleteCareEvent(ev.id);
-                                  const res = await fetchCareEvents(fullScreenAnalysis.id);
-                                  if (res.success) setCareHistory(res.data);
-                                }
-                              }}
-                              style={{ background: 'transparent', border: 'none', color: 'var(--danger)', padding: 4, cursor: 'pointer', opacity: 0.6 }}
-                            >
-                              <Trash2 size={14} />
-                            </button>
                           </div>
                         ))}
                       </div>
                     )}
                   </div>
-                </div>
-              ) : (
-                // Tab History
-                <div style={{ padding: 20, background: 'var(--white)', borderRadius: 28, border: '1px solid var(--card-border)' }}>
-                  <h3 style={{ marginTop: 0, fontSize: '1rem', display: 'flex', alignItems: 'center', gap: 8 }}><History size={18} color="var(--primary)" /> Evoluzione Pianta</h3>
-                  <p style={{ fontSize: '0.75rem', opacity: 0.6, marginBottom: 16 }}>Diario fotografico per monitorare la crescita e la salute nel tempo.</p>
 
-                  {isLoadingPhotos ? <div className="loader-box"><div className="spin" /></div> : (
-                    <>
-                      <div className="photo-archive-grid">
-                        {plantPhotos.length === 0 ? (
-                          <div style={{ gridColumn: '1/-1', textAlign: 'center', padding: '20px 0', opacity: 0.4 }}>
-                            <CameraOff size={32} style={{ marginBottom: 8 }} />
-                            <p style={{ fontSize: '0.8rem' }}>Nessuna foto salvata.<br />Usa "CHECK FOTO" per iniziare l'album!</p>
-                          </div>
-                        ) : plantPhotos.map((p: any) => (
-                          <div
-                            key={p.id}
-                            className="photo-archive-item"
-                            onClick={() => setSelectedPhotoId(selectedPhotoId === p.id ? null : p.id)}
-                            style={{
-                              position: 'relative',
-                              border: selectedPhotoId === p.id ? '3px solid var(--primary)' : 'none',
-                              transform: selectedPhotoId === p.id ? 'scale(0.95)' : 'scale(1)',
-                              transition: 'all 0.2s',
-                              zIndex: selectedPhotoId === p.id ? 10 : 1
-                            }}
-                          >
-                            <img src={p.photo_url} alt="Crescita" style={{ opacity: selectedPhotoId === p.id ? 0.8 : 1 }} />
-                            <div className="photo-archive-date">{new Date(p.taken_at).toLocaleDateString()}</div>
-                            {selectedPhotoId === p.id && (
-                              <div style={{ position: 'absolute', top: 8, right: 8, background: 'var(--primary)', color: 'white', borderRadius: '50%', width: 24, height: 24, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                <CheckCircle2 size={16} />
-                              </div>
-                            )}
-                          </div>
-                        ))}
-                      </div>
-
-                      {selectedPhotoId && (
-                        <div style={{ marginTop: 16, display: 'flex', gap: 12, animation: 'fadeIn 0.3s ease-out' }}>
-                          <button
-                            onClick={() => {
-                              const photo = plantPhotos.find(p => p.id === selectedPhotoId);
-                              if (photo) window.open(photo.photo_url, '_blank');
-                            }}
-                            style={{ flex: 1, padding: 14, borderRadius: 16, border: 'none', background: 'var(--primary-light)', color: 'var(--primary-dark)', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}
-                          >
-                            <Maximize2 size={18} /> APRI
-                          </button>
-                          <button
-                            onClick={() => {
-                              showDeleteConfirmation("Vuoi eliminare questa foto?", async () => {
-                                setAchievementToast('Eliminazione foto in corso... ⏳');
-                                const res = await deletePlantPhoto(selectedPhotoId);
-                                if (res.success) {
-                                  setAchievementToast('Foto eliminata correttamente 🗑️');
-                                  setPlantPhotos(prev => prev.filter(p => p.id !== selectedPhotoId));
-                                  setSelectedPhotoId(null);
-                                  setTimeout(() => setAchievementToast(null), 3000);
-                                } else {
-                                  setAchievementToast('Errore eliminazione foto ❌');
-                                  setTimeout(() => setAchievementToast(null), 3000);
-                                }
-                              });
-                            }}
-                            style={{ flex: 1, padding: 14, borderRadius: 16, border: 'none', background: '#fee', color: '#c00', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}
-                          >
-                            <Trash2 size={18} /> ELIMINA
-                          </button>
+                  {detailTab === 'history' && (
+                    <div style={{ padding: 20, background: 'var(--white)', borderRadius: 28, border: '1px solid var(--card-border)' }}>
+                      <h3 style={{ marginTop: 0, fontSize: '1rem', display: 'flex', alignItems: 'center', gap: 8 }}><History size={18} color="var(--primary)" /> Evoluzione Pianta</h3>
+                      <p style={{ fontSize: '0.75rem', opacity: 0.6, marginBottom: 16 }}>Diario fotografico per monitorare la crescita e la salute nel tempo.</p>
+                      {isLoadingPhotos ? <div className="loader-box"><div className="spin" /></div> : (
+                        <div className="photo-archive-grid">
+                          {plantPhotos.length === 0 ? (
+                            <div style={{ gridColumn: '1/-1', textAlign: 'center', padding: '20px 0', opacity: 0.4 }}>
+                              <CameraOff size={32} style={{ marginBottom: 8 }} />
+                              <p style={{ fontSize: '0.8rem' }}>Nessuna foto salvata.<br />Usa "CHECK FOTO" per iniziare l'album!</p>
+                            </div>
+                          ) : plantPhotos.map((p: any) => (
+                            <div key={p.id} className="photo-archive-item" onClick={() => window.open(p.photo_url, '_blank')}>
+                              <img src={p.photo_url} alt="Crescita" />
+                              <div className="photo-archive-date">{new Date(p.taken_at).toLocaleDateString()}</div>
+                            </div>
+                          ))}
                         </div>
                       )}
-                    </>
+                    </div>
                   )}
+
+                  <div style={{ padding: 20, background: 'var(--white)', borderRadius: 28, border: '1px solid var(--card-border)' }}>
+                    <h3 style={{ marginTop: 0, display: 'flex', alignItems: 'center', gap: 8 }}><Calendar size={20} color="var(--primary)" /> Piano di Cura AI</h3>
+                    {fullScreenAnalysis.carePlan ? (
+                      <div style={{ whiteSpace: 'pre-wrap', lineHeight: 1.6, fontSize: '0.9rem' }}>
+                        {fullScreenAnalysis.carePlan}
+                      </div>
+                    ) : (
+                      <div style={{ textAlign: 'center', padding: '20px 0' }}>
+                        <p style={{ opacity: 0.6 }}>Non è ancora stato generato un piano di cura personalizzato per questa pianta.</p>
+                        <button
+                          disabled={isGeneratingPlan}
+                          onClick={async () => {
+                            setIsGeneratingPlan(true);
+                            try {
+                              const ai = new GoogleGenAI({ apiKey: GEMINI_KEY });
+                              const prompt = `Sei un esperto botanico. Crea un PIANO DI CURA DETTAGLIATO per questa pianta in giardino: ${fullScreenAnalysis.name} (${fullScreenAnalysis.scientificName}). 
+                                     Lo schema deve includere: 
+                                     1. PROGRAMMA IRRIGAZIONE: frequenza e quantità.
+                                     2. MANUTENZIONE: concimazione, potatura e rinvasi.
+                                     3. CHECK FOTOGRAFICI: ogni quanto monitorare la pianta per parassiti.
+                                     4. TRATTAMENTI SPECIALI: se è malata (${fullScreenAnalysis.healthStatus}).
+                                     Usa un formato a lista leggibile in Italiano. Sii autorevole e preciso.`;
+
+                              const res = await ai.models.generateContent({ model: 'gemini-1.5-flash', contents: prompt });
+                              const plan = res.text || "Impossibile generare piano.";
+
+                              // Persisti su DB
+                              if (username && fullScreenAnalysis.id) {
+                                const nextDate = new Date();
+                                nextDate.setDate(nextDate.getDate() + 2); // Primo controllo tra 2 giorni
+                                await updateUserPlant(username, fullScreenAnalysis.id, {
+                                  notes: plan,
+                                  next_check_at: nextDate.toISOString()
+                                });
+
+                                // Ricarica lista per mostrare badge/scadenze
+                                const freshPlants = await fetchUserPlants(username);
+                                if (freshPlants.success) setUserPlants(freshPlants.data);
+                              }
+
+                              setFullScreenAnalysis(prev => prev ? ({ ...prev, carePlan: plan }) : null);
+                            } catch (e) { alert("Errore generazione piano."); }
+                            finally { setIsGeneratingPlan(false); }
+                          }}
+                          style={{ background: 'var(--primary)', color: 'white', border: 'none', padding: '12px 24px', borderRadius: 100, fontWeight: 800, marginTop: 10, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8, margin: '0 auto' }}>
+                          {isGeneratingPlan ? <RefreshCw size={14} className="spin" /> : <Sparkles size={16} />} GENERA PIANO AI
+                        </button>
+                      </div>
+                    )}
+                  </div>
                 </div>
               )}
 
@@ -4931,36 +3475,34 @@ function App() {
               )}
             </div>
 
-            {
-              showDeleteConfirm && (
-                <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center', zIndex: 100 }}>
-                  <div style={{ background: 'white', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, width: '100%', animation: 'slideUp 0.3s ease-out' }}>
-                    <h3 style={{ marginTop: 0, textAlign: 'center', color: 'var(--danger)' }}>Eliminare Pianta?</h3>
-                    <p style={{ textAlign: 'center', opacity: 0.7, marginBottom: 24 }}>Questa azione non può essere annullata.</p>
-                    <div style={{ display: 'flex', gap: 12 }}>
-                      <button onClick={() => setShowDeleteConfirm(false)} style={{ flex: 1, padding: 16, borderRadius: 16, border: 'none', background: '#f5f5f5', fontWeight: 700, fontSize: '1rem', cursor: 'pointer' }}>ANNULLA</button>
-                      <button onClick={async () => {
-                        if (username && fullScreenAnalysis?.id) {
-                          const resDel = await deleteUserPlant(username, fullScreenAnalysis.id);
-                          if (resDel.success) {
-                            setAchievementToast('Pianta rimossa dal giardino 🗑️');
-                            setTimeout(() => setAchievementToast(null), 3000);
-                            setFullScreenAnalysis(null);
-                            setShowDeleteConfirm(false);
-                            // Refresh
-                            const res = await fetchUserPlants(username);
-                            if (res.success) setUserPlants(res.data);
-                          } else {
-                            alert("Errore eliminazione: " + (resDel.error || 'Sconosciuto'));
-                          }
+            {showDeleteConfirm && (
+              <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center', zIndex: 100 }}>
+                <div style={{ background: 'white', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, width: '100%', animation: 'slideUp 0.3s ease-out' }}>
+                  <h3 style={{ marginTop: 0, textAlign: 'center', color: 'var(--danger)' }}>Eliminare Pianta?</h3>
+                  <p style={{ textAlign: 'center', opacity: 0.7, marginBottom: 24 }}>Questa azione non può essere annullata.</p>
+                  <div style={{ display: 'flex', gap: 12 }}>
+                    <button onClick={() => setShowDeleteConfirm(false)} style={{ flex: 1, padding: 16, borderRadius: 16, border: 'none', background: '#f5f5f5', fontWeight: 700, fontSize: '1rem', cursor: 'pointer' }}>ANNULLA</button>
+                    <button onClick={async () => {
+                      if (username && fullScreenAnalysis?.id) {
+                        const resDel = await deleteUserPlant(username, fullScreenAnalysis.id);
+                        if (resDel.success) {
+                          setAchievementToast('Pianta rimossa dal giardino 🗑️');
+                          setTimeout(() => setAchievementToast(null), 3000);
+                          setFullScreenAnalysis(null);
+                          setShowDeleteConfirm(false);
+                          // Refresh
+                          const res = await fetchUserPlants(username);
+                          if (res.success) setUserPlants(res.data);
+                        } else {
+                          alert("Errore eliminazione: " + (resDel.error || 'Sconosciuto'));
                         }
-                      }} style={{ flex: 1, padding: 16, borderRadius: 16, border: 'none', background: '#fee', color: '#c00', fontWeight: 700, fontSize: '1rem', cursor: 'pointer' }}>ELIMINA</button>
-                    </div>
+                      }
+                    }} style={{ flex: 1, padding: 16, borderRadius: 16, border: 'none', background: '#fee', color: '#c00', fontWeight: 700, fontSize: '1rem', cursor: 'pointer' }}>ELIMINA</button>
                   </div>
                 </div>
-              )
-            }
-          </div >
+              </div>
+            )}
+          </div>
         )
       }
 
@@ -5034,313 +3576,310 @@ function App() {
       }
 
       {/* Toast Notifiche Premium */}
-      {
-        achievementToast && (
-          <div className="achievement-toast">
-            <div style={{ background: 'rgba(255,255,255,0.2)', padding: 8, borderRadius: 12 }}><Sparkles size={20} /></div>
-            <span>{achievementToast}</span>
-          </div>
-        )
-      }
+      {achievementToast && (
+        <div className="achievement-toast">
+          <div style={{ background: 'rgba(255,255,255,0.2)', padding: 8, borderRadius: 12 }}><Sparkles size={20} /></div>
+          <span>{achievementToast}</span>
+        </div>
+      )}
 
-      {
-        isLeaderboardOpen && (
-          <div className="side-overlay" style={{ zIndex: 450 }}>
-            {/* Banner Header Integrato */}
-            {/* Banner Header Integrato (Uniformato) */}
-            <div style={{
-              background: 'linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%)',
-              padding: '24px 20px 28px',
-              position: 'relative',
-              boxShadow: '0 4px 20px rgba(0,0,0,0.15)',
-              overflow: 'hidden',
-              borderBottomLeftRadius: 32,
-              borderBottomRightRadius: 32,
-              flexShrink: 0
-            }}>
-              <Sprout size={140} style={{ position: 'absolute', right: -20, top: -20, opacity: 0.1, color: 'white', transform: 'rotate(15deg)' }} />
+      {isLeaderboardOpen && (
+        <div className="side-overlay" style={{ zIndex: 450 }}>
+          {/* Banner Header Integrato */}
+          {/* Banner Header Integrato (Uniformato) */}
+          <div style={{
+            background: 'linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%)',
+            padding: '24px 20px 28px',
+            position: 'relative',
+            boxShadow: '0 4px 20px rgba(0,0,0,0.15)',
+            overflow: 'hidden',
+            borderBottomLeftRadius: 32,
+            borderBottomRightRadius: 32,
+            flexShrink: 0
+          }}>
+            <Sprout size={140} style={{ position: 'absolute', right: -20, top: -20, opacity: 0.1, color: 'white', transform: 'rotate(15deg)' }} />
 
-              <div style={{ display: 'flex', alignItems: 'center', gap: 16, position: 'relative', zIndex: 1 }}>
-                <button
-                  className="btn-header-icon"
-                  onClick={() => setIsLeaderboardOpen(false)}
-                  style={{
-                    background: 'rgba(255,255,255,0.2)',
-                    color: 'white',
-                    border: 'none',
-                    width: 40,
-                    height: 40,
-                    borderRadius: 12,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    cursor: 'pointer'
-                  }}>
-                  <ChevronLeft size={24} />
-                </button>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 16, position: 'relative', zIndex: 1 }}>
+              <button
+                className="btn-header-icon"
+                onClick={() => setIsLeaderboardOpen(false)}
+                style={{
+                  background: 'rgba(255,255,255,0.2)',
+                  color: 'white',
+                  border: 'none',
+                  width: 40,
+                  height: 40,
+                  borderRadius: 12,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  cursor: 'pointer'
+                }}>
+                <ChevronLeft size={24} />
+              </button>
 
-                <div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                    <Trophy size={24} color="white" fill="white" fillOpacity={0.3} />
-                    <h2 style={{ margin: 0, color: 'white', fontSize: '1.5rem', fontWeight: 800, textShadow: '0 2px 4px rgba(0,0,0,0.1)' }}>Classifica Globale</h2>
-                  </div>
-                  <div style={{ color: 'rgba(255,255,255,0.85)', fontSize: '0.85rem', marginTop: 4, fontWeight: 500 }}>I migliori BioExpert della settimana</div>
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <Trophy size={24} color="white" fill="white" fillOpacity={0.3} />
+                  <h2 style={{ margin: 0, color: 'white', fontSize: '1.5rem', fontWeight: 800, textShadow: '0 2px 4px rgba(0,0,0,0.1)' }}>Classifica Globale</h2>
                 </div>
+                <div style={{ color: 'rgba(255,255,255,0.85)', fontSize: '0.85rem', marginTop: 4, fontWeight: 500 }}>I migliori BioExpert della settimana</div>
               </div>
             </div>
-            <div className="overlay-content" style={{ padding: 0 }}>
-              {/* Banner Premi Dinamico */}
-              <div style={{
-                background: activeLeaderboardType === 'beauty_contest' ? 'linear-gradient(135deg, var(--primary), var(--primary-dark))' : 'linear-gradient(135deg, #FFD700, #FFA000)',
-                margin: '16px',
-                borderRadius: '24px',
-                padding: '20px',
-                color: 'white',
-                position: 'relative',
-                overflow: 'hidden',
-                boxShadow: activeLeaderboardType === 'beauty_contest' ? '0 8px 20px rgba(46, 125, 50, 0.3)' : '0 8px 20px rgba(255, 160, 0, 0.3)'
-              }}>
-                <Trophy size={80} style={{ position: 'absolute', right: -10, bottom: -10, opacity: 0.2, transform: 'rotate(15deg)' }} />
-                <div style={{ position: 'relative', zIndex: 1 }}>
-                  <h4 style={{ margin: '0 0 8px', fontSize: '1.2rem', fontWeight: 900 }}>
-                    {activeLeaderboardType === 'beauty_contest' ? '🏆 PREMI DEL MESE' : '🏆 PREMI DELLA SETTIMANA'}
-                  </h4>
-                  <div style={{ fontSize: '0.85rem', lineHeight: 1.5, opacity: 0.95 }}>
-                    {activeLeaderboardType === 'beauty_contest'
-                      ? "I migliori curatori del mese riceveranno il badge 'Pollice Verde' e sconti esclusivi!"
-                      : "I primi 3 classificati riceveranno XP bonus e semi digitali rari per il proprio giardino!"}
-                  </div>
-                  <div style={{ display: 'flex', gap: 12, marginTop: 12 }}>
-                    {activeLeaderboardType === 'beauty_contest' ? (
-                      <>
-                        <div style={{ background: 'rgba(255,255,255,0.2)', padding: '4px 10px', borderRadius: 100, fontSize: '0.7rem', fontWeight: 800 }}>🥇 1000 XP</div>
-                        <div style={{ background: 'rgba(255,255,255,0.2)', padding: '4px 10px', borderRadius: 100, fontSize: '0.7rem', fontWeight: 800 }}>🥈 Badge Raro</div>
-                      </>
-                    ) : (
-                      <>
-                        <div style={{ background: 'rgba(255,255,255,0.2)', padding: '4px 10px', borderRadius: 100, fontSize: '0.7rem', fontWeight: 800 }}>🥇 500 XP</div>
-                        <div style={{ background: 'rgba(255,255,255,0.2)', padding: '4px 10px', borderRadius: 100, fontSize: '0.7rem', fontWeight: 800 }}>🥈 300 XP</div>
-                        <div style={{ background: 'rgba(255,255,255,0.2)', padding: '4px 10px', borderRadius: 100, fontSize: '0.7rem', fontWeight: 800 }}>🥉 150 XP</div>
-                      </>
-                    )}
-                  </div>
+          </div>
+          <div className="overlay-content" style={{ padding: 0 }}>
+            {/* Banner Premi Dinamico */}
+            <div style={{
+              background: activeLeaderboardType === 'beauty_contest' ? 'linear-gradient(135deg, var(--primary), var(--primary-dark))' : 'linear-gradient(135deg, #FFD700, #FFA000)',
+              margin: '16px',
+              borderRadius: '24px',
+              padding: '20px',
+              color: 'white',
+              position: 'relative',
+              overflow: 'hidden',
+              boxShadow: activeLeaderboardType === 'beauty_contest' ? '0 8px 20px rgba(46, 125, 50, 0.3)' : '0 8px 20px rgba(255, 160, 0, 0.3)'
+            }}>
+              <Trophy size={80} style={{ position: 'absolute', right: -10, bottom: -10, opacity: 0.2, transform: 'rotate(15deg)' }} />
+              <div style={{ position: 'relative', zIndex: 1 }}>
+                <h4 style={{ margin: '0 0 8px', fontSize: '1.2rem', fontWeight: 900 }}>
+                  {activeLeaderboardType === 'beauty_contest' ? '🏆 PREMI DEL MESE' : '🏆 PREMI DELLA SETTIMANA'}
+                </h4>
+                <div style={{ fontSize: '0.85rem', lineHeight: 1.5, opacity: 0.95 }}>
+                  {activeLeaderboardType === 'beauty_contest'
+                    ? "I migliori curatori del mese riceveranno il badge 'Pollice Verde' e sconti esclusivi!"
+                    : "I primi 3 classificati riceveranno XP bonus e semi digitali rari per il proprio giardino!"}
                 </div>
-              </div>
-
-              <div style={{ padding: '0 16px 24px' }}>
-                {/* NEW DOUBLE CARD SELECTOR */}
-                <div style={{ marginBottom: 24, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                  {/* Card 1: Concorso Globale */}
-                  <div
-                    onClick={() => { setActiveLeaderboardType('beauty_contest'); fetchLeaderboard(); }}
-                    style={{
-                      background: activeLeaderboardType === 'beauty_contest'
-                        ? 'linear-gradient(135deg, var(--primary), var(--primary-dark))'
-                        : 'var(--white)',
-                      color: activeLeaderboardType === 'beauty_contest' ? 'white' : 'var(--dark)',
-                      padding: 16,
-                      borderRadius: 24,
-                      border: `2px solid ${activeLeaderboardType === 'beauty_contest' ? 'transparent' : 'var(--card-border)'}`,
-                      cursor: 'pointer',
-                      transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-                      boxShadow: activeLeaderboardType === 'beauty_contest' ? '0 8px 20px rgba(46, 125, 50, 0.3)' : 'none',
-                      transform: activeLeaderboardType === 'beauty_contest' ? 'scale(1.02)' : 'scale(1)',
-                      position: 'relative',
-                      overflow: 'hidden',
-                      height: 160,
-                      display: 'flex',
-                      flexDirection: 'column',
-                      justifyContent: 'space-between'
-                    }}
-                  >
-                    {activeLeaderboardType === 'beauty_contest' && <Sparkles size={80} style={{ position: 'absolute', top: -20, right: -20, opacity: 0.1 }} />}
-
-                    <div>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                        <div style={{
-                          background: activeLeaderboardType === 'beauty_contest' ? 'rgba(255,255,255,0.2)' : 'var(--primary-light)',
-                          padding: 8,
-                          borderRadius: 12,
-                          color: activeLeaderboardType === 'beauty_contest' ? 'white' : 'var(--primary)'
-                        }}>
-                          <Award size={20} />
-                        </div>
-                        {(() => {
-                          const myRank = leaderboard.findIndex(u => u.username === username);
-                          return myRank !== -1 ? <div style={{ background: activeLeaderboardType === 'beauty_contest' ? 'white' : 'var(--primary)', color: activeLeaderboardType === 'beauty_contest' ? 'var(--primary)' : 'white', padding: '4px 8px', borderRadius: 8, fontSize: '0.7rem', fontWeight: 800 }}>#{myRank + 1}</div> : null;
-                        })()}
-                      </div>
-                      <h3 style={{ margin: '12px 0 4px', fontSize: '0.95rem', fontWeight: 800 }}>Generale</h3>
-                      <p style={{ margin: 0, fontSize: '0.75rem', opacity: 0.8, lineHeight: 1.3 }}>Bellezza vegetale assoluta</p>
-                    </div>
-
-                    {/* Mini Preview Classifica */}
-                    <div style={{ display: 'flex', alignItems: 'center', marginTop: 10 }}>
-                      {leaderboard.slice(0, 3).map((u, i) => (
-                        <div key={i} style={{
-                          width: 24, height: 24,
-                          borderRadius: '50%',
-                          background: activeLeaderboardType === 'beauty_contest' ? 'white' : '#eee',
-                          border: '2px solid white',
-                          marginLeft: i > 0 ? -8 : 0,
-                          fontSize: '0.6rem',
-                          display: 'flex', alignItems: 'center', justifyContent: 'center',
-                          fontWeight: 800,
-                          color: activeLeaderboardType === 'beauty_contest' ? 'var(--primary)' : '#666'
-                        }}>
-                          {u.username.charAt(0).toUpperCase()}
-                        </div>
-                      ))}
-                      {leaderboard.length > 3 && <div style={{ marginLeft: 6, fontSize: '0.7rem', fontWeight: 700, opacity: 0.8 }}>+{leaderboard.length - 3}</div>}
-                    </div>
-                  </div>
-
-                  {/* Card 2: Sfida Settimanale */}
-                  <div
-                    onClick={() => { setActiveLeaderboardType(weeklyChallenge.id); fetchLeaderboard(false, weeklyChallenge.id); }}
-                    style={{
-                      background: activeLeaderboardType !== 'beauty_contest'
-                        ? 'linear-gradient(135deg, #FF9800, #F57C00)'
-                        : 'var(--white)',
-                      color: activeLeaderboardType !== 'beauty_contest' ? 'white' : 'var(--dark)',
-                      padding: 16,
-                      borderRadius: 24,
-                      border: `2px solid ${activeLeaderboardType !== 'beauty_contest' ? 'transparent' : 'var(--card-border)'}`,
-                      cursor: 'pointer',
-                      transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-                      boxShadow: activeLeaderboardType !== 'beauty_contest' ? '0 8px 20px rgba(245, 124, 0, 0.3)' : 'none',
-                      transform: activeLeaderboardType !== 'beauty_contest' ? 'scale(1.02)' : 'scale(1)',
-                      position: 'relative',
-                      overflow: 'hidden',
-                      height: 160,
-                      display: 'flex',
-                      flexDirection: 'column',
-                      justifyContent: 'space-between'
-                    }}
-                  >
-                    {activeLeaderboardType !== 'beauty_contest' && <Star size={80} style={{ position: 'absolute', top: -20, right: -20, opacity: 0.1 }} />}
-
-                    <div>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                        <div style={{
-                          background: activeLeaderboardType !== 'beauty_contest' ? 'rgba(255,255,255,0.2)' : '#FFF3E0',
-                          padding: 8,
-                          borderRadius: 12,
-                          color: activeLeaderboardType !== 'beauty_contest' ? 'white' : '#F57C00'
-                        }}>
-                          <Star size={20} />
-                        </div>
-                        {(() => {
-                          const myRank = weeklyLeaderboard.findIndex(u => u.username === username);
-                          return myRank !== -1 ? <div style={{ background: activeLeaderboardType !== 'beauty_contest' ? 'white' : '#F57C00', color: activeLeaderboardType !== 'beauty_contest' ? '#F57C00' : 'white', padding: '4px 8px', borderRadius: 8, fontSize: '0.7rem', fontWeight: 800 }}>#{myRank + 1}</div> : null;
-                        })()}
-                      </div>
-                      <h3 style={{ margin: '12px 0 4px', fontSize: '0.95rem', fontWeight: 800 }}>Settimanale</h3>
-                      <p style={{ margin: 0, fontSize: '0.75rem', opacity: 0.8, lineHeight: 1.3 }}>{weeklyChallenge.requirement}</p>
-                    </div>
-
-                    {/* Mini Preview Classifica */}
-                    <div style={{ display: 'flex', alignItems: 'center', marginTop: 10 }}>
-                      {weeklyLeaderboard.slice(0, 3).map((u, i) => (
-                        <div key={i} style={{
-                          width: 24, height: 24,
-                          borderRadius: '50%',
-                          background: activeLeaderboardType !== 'beauty_contest' ? 'white' : '#eee',
-                          border: '2px solid white',
-                          marginLeft: i > 0 ? -8 : 0,
-                          fontSize: '0.6rem',
-                          display: 'flex', alignItems: 'center', justifyContent: 'center',
-                          fontWeight: 800,
-                          color: activeLeaderboardType !== 'beauty_contest' ? '#F57C00' : '#666'
-                        }}>
-                          {u.username.charAt(0).toUpperCase()}
-                        </div>
-                      ))}
-                      {weeklyLeaderboard.length > 3 && <div style={{ marginLeft: 6, fontSize: '0.7rem', fontWeight: 700, opacity: 0.8 }}>+{weeklyLeaderboard.length - 3}</div>}
-                    </div>
-                  </div>
-                </div>
-
-                <h3 style={{ marginTop: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
-                  {activeLeaderboardType === 'beauty_contest' ? <Award size={20} color="var(--primary)" /> : <Star size={20} color="#F57C00" />}
-                  {activeLeaderboardType === 'beauty_contest' ? 'Classifica Generale' : weeklyChallenge.title}
-                </h3>
-
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                  {!(activeLeaderboardType === 'beauty_contest' ? leaderboard : weeklyLeaderboard).length && (activeLeaderboardType === 'beauty_contest' ? leaderboard : weeklyLeaderboard).length === 0 ? (
-                    <div style={{ textAlign: 'center', padding: 40, opacity: 0.5 }}>
-                      <p>Nessun campione ancora...</p>
-                    </div>
+                <div style={{ display: 'flex', gap: 12, marginTop: 12 }}>
+                  {activeLeaderboardType === 'beauty_contest' ? (
+                    <>
+                      <div style={{ background: 'rgba(255,255,255,0.2)', padding: '4px 10px', borderRadius: 100, fontSize: '0.7rem', fontWeight: 800 }}>🥇 1000 XP</div>
+                      <div style={{ background: 'rgba(255,255,255,0.2)', padding: '4px 10px', borderRadius: 100, fontSize: '0.7rem', fontWeight: 800 }}>🥈 Badge Raro</div>
+                    </>
                   ) : (
                     <>
-                      {(activeLeaderboardType === 'beauty_contest' ? leaderboard : weeklyLeaderboard).map((entry: any, idx) => {
-                        if (!entry) return null;
-                        const isTop3 = idx < 3;
-                        const bg = idx === 0 ? 'linear-gradient(135deg, #FFF9C4 0%, #FFFDE7 100%)' :
-                          idx === 1 ? 'linear-gradient(135deg, #F5F5F5 0%, #FAFAFA 100%)' :
-                            idx === 2 ? 'linear-gradient(135deg, #EFEBE9 0%, #FBE9E7 100%)' : 'white';
-                        const border = idx === 0 ? '2px solid #FFD700' :
-                          idx === 1 ? '2px solid #C0C0C0' :
-                            idx === 2 ? '2px solid #CD7F32' : '1px solid var(--card-border)';
-
-                        return (
-                          <div key={idx} onClick={() => setSelectedEntry(entry)} style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: 12,
-                            padding: isTop3 ? '16px' : '12px 16px',
-                            background: bg,
-                            borderRadius: 20,
-                            border: border,
-                            boxShadow: isTop3 ? '0 4px 15px rgba(0,0,0,0.05)' : 'none',
-                            cursor: 'pointer'
-                          }}>
-                            <div style={{
-                              width: 32,
-                              height: 32,
-                              borderRadius: '50%',
-                              background: isTop3 ? 'white' : 'transparent',
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              fontWeight: 900,
-                              fontSize: isTop3 ? '1.2rem' : '0.9rem',
-                              color: isTop3 ? 'var(--dark)' : 'var(--text-muted)'
-                            }}>
-                              {idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : idx + 1}
-                            </div>
-
-                            <div style={{ position: 'relative' }}>
-                              <img
-                                src={entry.image_url || entry.image || 'https://placehold.co/100x100/e8f5e9/2e7d32?text=🌿'}
-                                style={{ width: 50, height: 50, borderRadius: 12, objectFit: 'cover', border: '2px solid var(--card-border)' }}
-                                onError={(e) => { e.currentTarget.src = 'https://placehold.co/100x100/e8f5e9/2e7d32?text=🌿'; }}
-                              />
-                              {isTop3 && <div style={{ position: 'absolute', bottom: -5, right: -5, background: 'white', borderRadius: '50%', padding: 2, boxShadow: '0 2px 5px rgba(0,0,0,0.1)' }}><Award size={14} color={idx === 0 ? '#FFD700' : idx === 1 ? '#C0C0C0' : '#CD7F32'} /></div>}
-                            </div>
-
-                            <div style={{ flex: 1 }}>
-                              <div style={{ fontWeight: 800, fontSize: isTop3 ? '1rem' : '0.9rem', color: entry.username === username ? 'var(--primary)' : 'var(--dark)' }}>
-                                {entry.username || 'Anonimo'} {entry.username === username && '(Tu)'}
-                              </div>
-                              {entry.plant_name && <div style={{ fontSize: '0.75rem', fontWeight: 700, fontStyle: 'italic', color: 'var(--primary)', marginBottom: 2 }}>{entry.plant_name}</div>}
-                              <div style={{ fontSize: '0.7rem', opacity: 0.5 }}>{new Date(entry.created_at || entry.timestamp).toLocaleDateString()}</div>
-                            </div>
-
-                            <div style={{ textAlign: 'right' }}>
-                              <div style={{ fontWeight: 900, color: 'var(--primary)', fontSize: '1.1rem' }}>{entry.score}</div>
-                              <div style={{ fontSize: '0.6rem', fontWeight: 700, opacity: 0.4 }}>PUNTI AI</div>
-                            </div>
-                          </div>
-                        );
-                      })}
+                      <div style={{ background: 'rgba(255,255,255,0.2)', padding: '4px 10px', borderRadius: 100, fontSize: '0.7rem', fontWeight: 800 }}>🥇 500 XP</div>
+                      <div style={{ background: 'rgba(255,255,255,0.2)', padding: '4px 10px', borderRadius: 100, fontSize: '0.7rem', fontWeight: 800 }}>🥈 300 XP</div>
+                      <div style={{ background: 'rgba(255,255,255,0.2)', padding: '4px 10px', borderRadius: 100, fontSize: '0.7rem', fontWeight: 800 }}>🥉 150 XP</div>
                     </>
                   )}
                 </div>
               </div>
             </div>
+
+            <div style={{ padding: '0 16px 24px' }}>
+              {/* NEW DOUBLE CARD SELECTOR */}
+              <div style={{ marginBottom: 24, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                {/* Card 1: Concorso Globale */}
+                <div
+                  onClick={() => { setActiveLeaderboardType('beauty_contest'); fetchLeaderboard(); }}
+                  style={{
+                    background: activeLeaderboardType === 'beauty_contest'
+                      ? 'linear-gradient(135deg, var(--primary), var(--primary-dark))'
+                      : 'var(--white)',
+                    color: activeLeaderboardType === 'beauty_contest' ? 'white' : 'var(--dark)',
+                    padding: 16,
+                    borderRadius: 24,
+                    border: `2px solid ${activeLeaderboardType === 'beauty_contest' ? 'transparent' : 'var(--card-border)'}`,
+                    cursor: 'pointer',
+                    transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                    boxShadow: activeLeaderboardType === 'beauty_contest' ? '0 8px 20px rgba(46, 125, 50, 0.3)' : 'none',
+                    transform: activeLeaderboardType === 'beauty_contest' ? 'scale(1.02)' : 'scale(1)',
+                    position: 'relative',
+                    overflow: 'hidden',
+                    height: 160,
+                    display: 'flex',
+                    flexDirection: 'column',
+                    justifyContent: 'space-between'
+                  }}
+                >
+                  {activeLeaderboardType === 'beauty_contest' && <Sparkles size={80} style={{ position: 'absolute', top: -20, right: -20, opacity: 0.1 }} />}
+
+                  <div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                      <div style={{
+                        background: activeLeaderboardType === 'beauty_contest' ? 'rgba(255,255,255,0.2)' : 'var(--primary-light)',
+                        padding: 8,
+                        borderRadius: 12,
+                        color: activeLeaderboardType === 'beauty_contest' ? 'white' : 'var(--primary)'
+                      }}>
+                        <Award size={20} />
+                      </div>
+                      {(() => {
+                        const myRank = leaderboard.findIndex(u => u.username === username);
+                        return myRank !== -1 ? <div style={{ background: activeLeaderboardType === 'beauty_contest' ? 'white' : 'var(--primary)', color: activeLeaderboardType === 'beauty_contest' ? 'var(--primary)' : 'white', padding: '4px 8px', borderRadius: 8, fontSize: '0.7rem', fontWeight: 800 }}>#{myRank + 1}</div> : null;
+                      })()}
+                    </div>
+                    <h3 style={{ margin: '12px 0 4px', fontSize: '0.95rem', fontWeight: 800 }}>Generale</h3>
+                    <p style={{ margin: 0, fontSize: '0.75rem', opacity: 0.8, lineHeight: 1.3 }}>Bellezza vegetale assoluta</p>
+                  </div>
+
+                  {/* Mini Preview Classifica */}
+                  <div style={{ display: 'flex', alignItems: 'center', marginTop: 10 }}>
+                    {leaderboard.slice(0, 3).map((u, i) => (
+                      <div key={i} style={{
+                        width: 24, height: 24,
+                        borderRadius: '50%',
+                        background: activeLeaderboardType === 'beauty_contest' ? 'white' : '#eee',
+                        border: '2px solid white',
+                        marginLeft: i > 0 ? -8 : 0,
+                        fontSize: '0.6rem',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        fontWeight: 800,
+                        color: activeLeaderboardType === 'beauty_contest' ? 'var(--primary)' : '#666'
+                      }}>
+                        {u.username.charAt(0).toUpperCase()}
+                      </div>
+                    ))}
+                    {leaderboard.length > 3 && <div style={{ marginLeft: 6, fontSize: '0.7rem', fontWeight: 700, opacity: 0.8 }}>+{leaderboard.length - 3}</div>}
+                  </div>
+                </div>
+
+                {/* Card 2: Sfida Settimanale */}
+                <div
+                  onClick={() => { setActiveLeaderboardType(weeklyChallenge.id); fetchLeaderboard(false, weeklyChallenge.id); }}
+                  style={{
+                    background: activeLeaderboardType !== 'beauty_contest'
+                      ? 'linear-gradient(135deg, #FF9800, #F57C00)'
+                      : 'var(--white)',
+                    color: activeLeaderboardType !== 'beauty_contest' ? 'white' : 'var(--dark)',
+                    padding: 16,
+                    borderRadius: 24,
+                    border: `2px solid ${activeLeaderboardType !== 'beauty_contest' ? 'transparent' : 'var(--card-border)'}`,
+                    cursor: 'pointer',
+                    transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                    boxShadow: activeLeaderboardType !== 'beauty_contest' ? '0 8px 20px rgba(245, 124, 0, 0.3)' : 'none',
+                    transform: activeLeaderboardType !== 'beauty_contest' ? 'scale(1.02)' : 'scale(1)',
+                    position: 'relative',
+                    overflow: 'hidden',
+                    height: 160,
+                    display: 'flex',
+                    flexDirection: 'column',
+                    justifyContent: 'space-between'
+                  }}
+                >
+                  {activeLeaderboardType !== 'beauty_contest' && <Star size={80} style={{ position: 'absolute', top: -20, right: -20, opacity: 0.1 }} />}
+
+                  <div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                      <div style={{
+                        background: activeLeaderboardType !== 'beauty_contest' ? 'rgba(255,255,255,0.2)' : '#FFF3E0',
+                        padding: 8,
+                        borderRadius: 12,
+                        color: activeLeaderboardType !== 'beauty_contest' ? 'white' : '#F57C00'
+                      }}>
+                        <Star size={20} />
+                      </div>
+                      {(() => {
+                        const myRank = weeklyLeaderboard.findIndex(u => u.username === username);
+                        return myRank !== -1 ? <div style={{ background: activeLeaderboardType !== 'beauty_contest' ? 'white' : '#F57C00', color: activeLeaderboardType !== 'beauty_contest' ? '#F57C00' : 'white', padding: '4px 8px', borderRadius: 8, fontSize: '0.7rem', fontWeight: 800 }}>#{myRank + 1}</div> : null;
+                      })()}
+                    </div>
+                    <h3 style={{ margin: '12px 0 4px', fontSize: '0.95rem', fontWeight: 800 }}>Settimanale</h3>
+                    <p style={{ margin: 0, fontSize: '0.75rem', opacity: 0.8, lineHeight: 1.3 }}>{weeklyChallenge.requirement}</p>
+                  </div>
+
+                  {/* Mini Preview Classifica */}
+                  <div style={{ display: 'flex', alignItems: 'center', marginTop: 10 }}>
+                    {weeklyLeaderboard.slice(0, 3).map((u, i) => (
+                      <div key={i} style={{
+                        width: 24, height: 24,
+                        borderRadius: '50%',
+                        background: activeLeaderboardType !== 'beauty_contest' ? 'white' : '#eee',
+                        border: '2px solid white',
+                        marginLeft: i > 0 ? -8 : 0,
+                        fontSize: '0.6rem',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        fontWeight: 800,
+                        color: activeLeaderboardType !== 'beauty_contest' ? '#F57C00' : '#666'
+                      }}>
+                        {u.username.charAt(0).toUpperCase()}
+                      </div>
+                    ))}
+                    {weeklyLeaderboard.length > 3 && <div style={{ marginLeft: 6, fontSize: '0.7rem', fontWeight: 700, opacity: 0.8 }}>+{weeklyLeaderboard.length - 3}</div>}
+                  </div>
+                </div>
+              </div>
+
+              <h3 style={{ marginTop: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
+                {activeLeaderboardType === 'beauty_contest' ? <Award size={20} color="var(--primary)" /> : <Star size={20} color="#F57C00" />}
+                {activeLeaderboardType === 'beauty_contest' ? 'Classifica Generale' : weeklyChallenge.title}
+              </h3>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                {!(activeLeaderboardType === 'beauty_contest' ? leaderboard : weeklyLeaderboard).length && (activeLeaderboardType === 'beauty_contest' ? leaderboard : weeklyLeaderboard).length === 0 ? (
+                  <div style={{ textAlign: 'center', padding: 40, opacity: 0.5 }}>
+                    <p>Nessun campione ancora...</p>
+                  </div>
+                ) : (
+                  <>
+                    {(activeLeaderboardType === 'beauty_contest' ? leaderboard : weeklyLeaderboard).map((entry: any, idx) => {
+                      if (!entry) return null;
+                      const isTop3 = idx < 3;
+                      const bg = idx === 0 ? 'linear-gradient(135deg, #FFF9C4 0%, #FFFDE7 100%)' :
+                        idx === 1 ? 'linear-gradient(135deg, #F5F5F5 0%, #FAFAFA 100%)' :
+                          idx === 2 ? 'linear-gradient(135deg, #EFEBE9 0%, #FBE9E7 100%)' : 'white';
+                      const border = idx === 0 ? '2px solid #FFD700' :
+                        idx === 1 ? '2px solid #C0C0C0' :
+                          idx === 2 ? '2px solid #CD7F32' : '1px solid var(--card-border)';
+
+                      return (
+                        <div key={idx} onClick={() => setSelectedEntry(entry)} style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 12,
+                          padding: isTop3 ? '16px' : '12px 16px',
+                          background: bg,
+                          borderRadius: 20,
+                          border: border,
+                          boxShadow: isTop3 ? '0 4px 15px rgba(0,0,0,0.05)' : 'none',
+                          cursor: 'pointer'
+                        }}>
+                          <div style={{
+                            width: 32,
+                            height: 32,
+                            borderRadius: '50%',
+                            background: isTop3 ? 'white' : 'transparent',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            fontWeight: 900,
+                            fontSize: isTop3 ? '1.2rem' : '0.9rem',
+                            color: isTop3 ? 'var(--dark)' : 'var(--text-muted)'
+                          }}>
+                            {idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : idx + 1}
+                          </div>
+
+                          <div style={{ position: 'relative' }}>
+                            <img
+                              src={entry.image_url || entry.image || 'https://placehold.co/100x100/e8f5e9/2e7d32?text=🌿'}
+                              style={{ width: 50, height: 50, borderRadius: 12, objectFit: 'cover', border: '2px solid var(--card-border)' }}
+                              onError={(e) => { e.currentTarget.src = 'https://placehold.co/100x100/e8f5e9/2e7d32?text=🌿'; }}
+                            />
+                            {isTop3 && <div style={{ position: 'absolute', bottom: -5, right: -5, background: 'white', borderRadius: '50%', padding: 2, boxShadow: '0 2px 5px rgba(0,0,0,0.1)' }}><Award size={14} color={idx === 0 ? '#FFD700' : idx === 1 ? '#C0C0C0' : '#CD7F32'} /></div>}
+                          </div>
+
+                          <div style={{ flex: 1 }}>
+                            <div style={{ fontWeight: 800, fontSize: isTop3 ? '1rem' : '0.9rem', color: entry.username === username ? 'var(--primary)' : 'var(--dark)' }}>
+                              {entry.username || 'Anonimo'} {entry.username === username && '(Tu)'}
+                            </div>
+                            {entry.plant_name && <div style={{ fontSize: '0.75rem', fontWeight: 700, fontStyle: 'italic', color: 'var(--primary)', marginBottom: 2 }}>{entry.plant_name}</div>}
+                            <div style={{ fontSize: '0.7rem', opacity: 0.5 }}>{new Date(entry.created_at || entry.timestamp).toLocaleDateString()}</div>
+                          </div>
+
+                          <div style={{ textAlign: 'right' }}>
+                            <div style={{ fontWeight: 900, color: 'var(--primary)', fontSize: '1.1rem' }}>{entry.score}</div>
+                            <div style={{ fontSize: '0.6rem', fontWeight: 700, opacity: 0.4 }}>PUNTI AI</div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </>
+                )}
+              </div>
+            </div>
           </div>
-        )
+        </div>
+      )
       }
 
       {
@@ -5446,7 +3985,7 @@ interface ErrorBoundaryState {
   error: any;
 }
 
-class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundaryState> {
+class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
   constructor(props: ErrorBoundaryProps) {
     super(props);
     this.state = { hasError: false, error: null };

@@ -17,7 +17,6 @@ import {
   deleteCareEvent,
   fetchPlantPhotos,
   addPlantPhoto,
-  deletePlantPhoto,
   deleteLeaderboardEntry,
   getLocalUsername,
   setLocalUsername,
@@ -1433,7 +1432,6 @@ function App() {
   const [isGeneratingPlan, setIsGeneratingPlan] = useState(false);
   const [itemToDelete, setItemToDelete] = useState<string | null>(null);
   const [plantPhotos, setPlantPhotos] = useState<any[]>([]);
-  const [selectedPhotoId, setSelectedPhotoId] = useState<string | null>(null);
   const [isLoadingPhotos, setIsLoadingPhotos] = useState(false);
   const [notificationsEnabled, setNotificationsEnabled] = useState(true); // New state for notifications
   const [lightLevel, setLightLevel] = useState<number | null>(null); // Lux value
@@ -4823,73 +4821,20 @@ function App() {
                 <div style={{ padding: 20, background: 'var(--white)', borderRadius: 28, border: '1px solid var(--card-border)' }}>
                   <h3 style={{ marginTop: 0, fontSize: '1rem', display: 'flex', alignItems: 'center', gap: 8 }}><History size={18} color="var(--primary)" /> Evoluzione Pianta</h3>
                   <p style={{ fontSize: '0.75rem', opacity: 0.6, marginBottom: 16 }}>Diario fotografico per monitorare la crescita e la salute nel tempo.</p>
-
                   {isLoadingPhotos ? <div className="loader-box"><div className="spin" /></div> : (
-                    <>
-                      <div className="photo-archive-grid">
-                        {plantPhotos.length === 0 ? (
-                          <div style={{ gridColumn: '1/-1', textAlign: 'center', padding: '20px 0', opacity: 0.4 }}>
-                            <CameraOff size={32} style={{ marginBottom: 8 }} />
-                            <p style={{ fontSize: '0.8rem' }}>Nessuna foto salvata.<br />Usa "CHECK FOTO" per iniziare l'album!</p>
-                          </div>
-                        ) : plantPhotos.map((p: any) => (
-                          <div
-                            key={p.id}
-                            className="photo-archive-item"
-                            onClick={() => setSelectedPhotoId(selectedPhotoId === p.id ? null : p.id)}
-                            style={{
-                              position: 'relative',
-                              border: selectedPhotoId === p.id ? '3px solid var(--primary)' : 'none',
-                              transform: selectedPhotoId === p.id ? 'scale(0.95)' : 'scale(1)',
-                              transition: 'all 0.2s',
-                              zIndex: selectedPhotoId === p.id ? 10 : 1
-                            }}
-                          >
-                            <img src={p.photo_url} alt="Crescita" style={{ opacity: selectedPhotoId === p.id ? 0.8 : 1 }} />
-                            <div className="photo-archive-date">{new Date(p.taken_at).toLocaleDateString()}</div>
-                            {selectedPhotoId === p.id && (
-                              <div style={{ position: 'absolute', top: 8, right: 8, background: 'var(--primary)', color: 'white', borderRadius: '50%', width: 24, height: 24, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                <CheckCircle2 size={16} />
-                              </div>
-                            )}
-                          </div>
-                        ))}
-                      </div>
-
-                      {selectedPhotoId && (
-                        <div style={{ marginTop: 16, display: 'flex', gap: 12, animation: 'fadeIn 0.3s ease-out' }}>
-                          <button
-                            onClick={() => {
-                              const photo = plantPhotos.find(p => p.id === selectedPhotoId);
-                              if (photo) window.open(photo.photo_url, '_blank');
-                            }}
-                            style={{ flex: 1, padding: 14, borderRadius: 16, border: 'none', background: 'var(--primary-light)', color: 'var(--primary-dark)', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}
-                          >
-                            <Maximize2 size={18} /> APRI
-                          </button>
-                          <button
-                            onClick={() => {
-                              showDeleteConfirmation("Vuoi eliminare questa foto?", async () => {
-                                setAchievementToast('Eliminazione foto in corso... ⏳');
-                                const res = await deletePlantPhoto(selectedPhotoId);
-                                if (res.success) {
-                                  setAchievementToast('Foto eliminata correttamente 🗑️');
-                                  setPlantPhotos(prev => prev.filter(p => p.id !== selectedPhotoId));
-                                  setSelectedPhotoId(null);
-                                  setTimeout(() => setAchievementToast(null), 3000);
-                                } else {
-                                  setAchievementToast('Errore eliminazione foto ❌');
-                                  setTimeout(() => setAchievementToast(null), 3000);
-                                }
-                              });
-                            }}
-                            style={{ flex: 1, padding: 14, borderRadius: 16, border: 'none', background: '#fee', color: '#c00', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}
-                          >
-                            <Trash2 size={18} /> ELIMINA
-                          </button>
+                    <div className="photo-archive-grid">
+                      {plantPhotos.length === 0 ? (
+                        <div style={{ gridColumn: '1/-1', textAlign: 'center', padding: '20px 0', opacity: 0.4 }}>
+                          <CameraOff size={32} style={{ marginBottom: 8 }} />
+                          <p style={{ fontSize: '0.8rem' }}>Nessuna foto salvata.<br />Usa "CHECK FOTO" per iniziare l'album!</p>
                         </div>
-                      )}
-                    </>
+                      ) : plantPhotos.map((p: any) => (
+                        <div key={p.id} className="photo-archive-item" onClick={() => window.open(p.photo_url, '_blank')}>
+                          <img src={p.photo_url} alt="Crescita" />
+                          <div className="photo-archive-date">{new Date(p.taken_at).toLocaleDateString()}</div>
+                        </div>
+                      ))}
+                    </div>
                   )}
                 </div>
               )}
