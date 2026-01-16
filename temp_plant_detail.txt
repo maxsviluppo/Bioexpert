@@ -1,0 +1,303 @@
+
+>       {/* PLANT DETAIL PAGE - Full Screen Modal */}
+        {fullScreenAnalysis && (
+          <div style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'white',
+            zIndex: 2000,
+            overflow: 'auto',
+            display: 'flex',
+            flexDirection: 'column'
+          }}>
+            {/* Header Verde */}
+            <div style={{
+              background: 'linear-gradient(135deg, #2E7D32 0%, #1B5E20 100%)',
+              padding: '16px 20px',
+              color: 'white',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 12
+            }}>
+              <button onClick={() => setFullScreenAnalysis(null)} style={{
+                background: 'rgba(255,255,255,0.2)',
+                border: 'none',
+                borderRadius: '50%',
+                width: 40,
+                height: 40,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer',
+                color: 'white'
+              }}>
+                <ChevronLeft size={24} />
+              </button>
+              <div style={{ flex: 1 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                  <Sprout size={24} />
+                  <h2 style={{ margin: 0, fontSize: '1.3rem', fontWeight: 800 }}>{fullScreenAnalysis.name}</h2>
+                </div>
+                <div style={{ fontSize: '0.85rem', opacity: 0.9, fontStyle: 'italic' }}>{fullScreenAnalysis.scientificName}</div>
+              </div>
+              {/* Campanella Notifiche */}
+              <button onClick={() => {
+                setNotificationsEnabled(!notificationsEnabled);
+              }} style={{
+                background: notificationsEnabled ? 'rgba(255, 215, 0, 0.3)' : 'rgba(255,255,255,0.2)',
+                border: 'none',
+                borderRadius: '50%',
+                width: 40,
+                height: 40,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer',
+                color: notificationsEnabled ? '#FFD700' : 'white'
+              }}>
+                <Bell size={20} />
+              </button>
+            </div>
+  
+            {/* Foto Pianta */}
+            <div style={{ position: 'relative', height: 300, background: '#f5f5f5' }}>
+              <img
+                src={fullScreenAnalysis.image || 'https://placehold.co/600x400?text=Pianta'}
+                style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+              />
+              <div style={{
+                position: 'absolute',
+                top: 16,
+                right: 16,
+                background: fullScreenAnalysis.healthStatus === 'sick' ? '#ffebee' : '#e8f5e9',
+                padding: '8px 16px',
+                borderRadius: 20,
+                fontSize: '0.8rem',
+                fontWeight: 800,
+                color: fullScreenAnalysis.healthStatus === 'sick' ? '#d32f2f' : '#2e7d32',
+                boxShadow: '0 4px 12px rgba(0,0,0,0.1)'
+              }}>
+                {fullScreenAnalysis.healthStatus === 'sick' ? 'MALATA' : 'SANA'}
+              </div>
+            </div>
+  
+            {/* Tab Navigation */}
+            <div style={{
+              display: 'flex',
+              gap: 8,
+              padding: '16px 20px',
+              borderBottom: '1px solid #e0e0e0'
+            }}>
+              {['INFO', 'CURA'].map((tab) => (
+                <button
+                  key={tab}
+                  onClick={() => setDetailTab(tab.toLowerCase() as any)}
+                  style={{
+                    flex: 1,
+                    padding: '12px',
+                    background: detailTab === tab.toLowerCase() ? '#2E7D32' : 'transparent',
+                    color: detailTab === tab.toLowerCase() ? 'white' : '#666',
+                    border: detailTab === tab.toLowerCase() ? 'none' : '1px solid #e0e0e0',
+                    borderRadius: 12,
+                    fontWeight: 800,
+                    fontSize: '0.85rem',
+                    cursor: 'pointer',
+                    transition: 'all 0.2s'
+                  }}
+                >
+                  {tab}
+                </button>
+              ))}
+            </div>
+  
+            {/* Content Area */}
+            <div style={{ flex: 1, padding: '20px', paddingBottom: 20, overflow: 'auto' }}>
+              {detailTab === 'info' && (
+                <>
+                  {/* Stato Salute */}
+                  <div style={{ marginBottom: 24 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12, color: '#2E7D32' }}>
+                      <ShieldCheck size={20} />
+                      <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 800 }}>Stato di Salute</h3>
+                    </div>
+                    <div style={{
+                      background: fullScreenAnalysis.healthStatus === 'sick' ? 'linear-gradient(135deg, #FFEBEE 0%, #FFCDD2 100%)' : 'linear-gradient(135deg, #E8F5E9 0%, #C8E6C9 100%)',
+                      borderRadius: 16,
+                      padding: '16px',
+                      marginBottom: 12
+                    }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                        {fullScreenAnalysis.healthStatus === 'sick' ? (
+                          <AlertTriangle size={20} color="#d32f2f" />
+                        ) : (
+                          <CheckCircle2 size={20} color="#2E7D32" />
+                        )}
+                        <strong style={{ fontSize: '1rem', color: fullScreenAnalysis.healthStatus === 'sick' ? '#d32f2f' : '#2E7D32' }}>
+                          {fullScreenAnalysis.healthStatus === 'sick' ? 'Pianta Malata' : 'Pianta Sana'}
+                        </strong>
+                      </div>
+                      <p style={{ margin: 0, fontSize: '0.85rem', color: '#666', lineHeight: 1.6 }}>{fullScreenAnalysis.diagnosis}</p>
+                    </div>
+                    {fullScreenAnalysis.healthStatus === 'sick' && (
+                      <div style={{
+                        background: 'linear-gradient(135deg, #FFF8E1 0%, #FFECB3 100%)',
+                        borderRadius: 12,
+                        padding: '12px',
+                        fontSize: '0.8rem',
+                        color: '#E65100',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 8
+                      }}>
+                        <AlertTriangle size={16} />
+                        <span><strong>Piano di cura attivo!</strong> Vai alla tab CURA per i dettagli del trattamento.</span>
+                      </div>
+                    )}
+                  </div>
+  
+                  {/* Consigli Rapidi */}
+                  <div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16, color: '#d32f2f' }}>
+                      <Heart size={20} />
+                      <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 800 }}>Consigli Rapidi</h3>
+                    </div>
+  
+                    {/* Irrigazione */}
+                    <div style={{
+                      background: 'linear-gradient(135deg, #E8F5E9 0%, #C8E6C9 100%)',
+                      borderRadius: 16,
+                      padding: '16px',
+                      marginBottom: 12
+                    }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, color: '#1B5E20' }}>
+                        <Droplets size={18} />
+                        <strong style={{ fontSize: '0.9rem' }}>Irrigazione</strong>
+                      </div>
+                      <p style={{ margin: 0, fontSize: '0.85rem', color: '#2E7D32' }}>{fullScreenAnalysis.care?.watering}</p>
+                    </div>
+  
+                    {/* Esposizione */}
+                    <div style={{
+                      background: 'linear-gradient(135deg, #FFF8E1 0%, #FFECB3 100%)',
+                      borderRadius: 16,
+                      padding: '16px',
+                      marginBottom: 12
+                    }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, color: '#E65100' }}>
+                        <Sun size={18} />
+                        <strong style={{ fontSize: '0.9rem' }}>Esposizione</strong>
+                      </div>
+                      <p style={{ margin: 0, fontSize: '0.85rem', color: '#F57C00' }}>{fullScreenAnalysis.care?.general}</p>
+                    </div>
+  
+                    {/* Potatura */}
+                    <div style={{
+                      background: 'linear-gradient(135deg, #E8F5E9 0%, #C8E6C9 100%)',
+                      borderRadius: 16,
+                      padding: '16px',
+                      marginBottom: 12
+                    }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, color: '#1B5E20' }}>
+                        <Scissors size={18} />
+                        <strong style={{ fontSize: '0.9rem' }}>Potatura</strong>
+                      </div>
+                      <p style={{ margin: 0, fontSize: '0.85rem', color: '#2E7D32' }}>{fullScreenAnalysis.care?.pruning}</p>
+                    </div>
+  
+                    {/* Rinvaso */}
+                    <div style={{
+                      background: 'linear-gradient(135deg, #E8F5E9 0%, #C8E6C9 100%)',
+                      borderRadius: 16,
+                      padding: '16px'
+                    }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, color: '#1B5E20' }}>
+                        <Package size={18} />
+                        <strong style={{ fontSize: '0.9rem' }}>Rinvaso</strong>
+                      </div>
+                      <p style={{ margin: 0, fontSize: '0.85rem', color: '#2E7D32' }}>{fullScreenAnalysis.care?.repotting}</p>
+                    </div>
+  
+                    {/* Luxometro */}
+                    {lightLevel !== null && (
+                      <div style={{
+                        background: 'linear-gradient(135deg, #FFF8E1 0%, #FFECB3 100%)',
+                        borderRadius: 16,
+                        padding: '16px',
+                        marginTop: 12
+                      }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, color: '#E65100' }}>
+                          <Sun size={18} />
+                          <strong style={{ fontSize: '0.9rem' }}>Luce Ambiente</strong>
+                        </div>
+                        <p style={{ margin: 0, fontSize: '1.2rem', fontWeight: 800, color: '#F57C00' }}>
+                          {lightLevel.toFixed(0)} lux
+                        </p>
+                        <p style={{ margin: '4px 0 0 0', fontSize: '0.75rem', color: '#666' }}>
+                          {lightLevel < 100 ? '🌑 Molto buio' : lightLevel < 500 ? '🌙 Ombra' : lightLevel < 1000 ? '☁️ Luce indiretta' : lightLevel < 5000 ? '⛅ Luminoso' : '☀️ Pieno sole'}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                </>
+              )}
+  
+              {detailTab === 'cura' && (
+                <div>
+                  {fullScreenAnalysis.healthStatus === 'sick' ? (
+                    <>
+                      <div style={{ marginBottom: 20 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12, color: '#d32f2f' }}>
+                          <Heart size={20} />
+                          <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 800 }}>Piano di Recupero Attivo</h3>
+                        </div>
+                        <p style={{ margin: 0, color: '#666', fontSize: '0.85rem', lineHeight: 1.6 }}>
+                          La tua pianta necessita di cure specifiche. Segui questi passaggi per il recupero completo.
+                        </p>
+                      </div>
+  
+                      {/* Checkpoint Cura */}
+                      <div style={{
+                        background: 'linear-gradient(135deg, #FFEBEE 0%, #FFCDD2 100%)',
+                        borderRadius: 16,
+                        padding: '16px',
+                        marginBottom: 12
+                      }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, color: '#d32f2f' }}>
+                          <Droplets size={18} />
+                          <strong style={{ fontSize: '0.9rem' }}>Fase 1: Irrigazione Controllata</strong>
+                        </div>
+                        <p style={{ margin: 0, fontSize: '0.85rem', color: '#666' }}>
+                          Riduci l'irrigazione e controlla il terreno. Annaffia solo quando asciutto.
+                        </p>
+                      </div>
+  
+                      <div style={{
+                        background: 'linear-gradient(135deg, #FFF8E1 0%, #FFECB3 100%)',
+                        borderRadius: 16,
+                        padding: '16px',
+                        marginBottom: 12
+                      }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, color: '#E65100' }}>
+                          <Sun size={18} />
+                          <strong style={{ fontSize: '0.9rem' }}>Fase 2: Esposizione Ottimale</strong>
+                        </div>
+                        <p style={{ margin: 0, fontSize: '0.85rem', color: '#666' }}>
+                          Sposta la pianta in zona con luce indiretta. Evita sole diretto nelle ore centrali.
+                        </p>
+                      </div>
+  
+                      <div style={{
+                        background: 'linear-gradient(135deg, #E8F5E9 0%, #C8E6C9 100%)',
+                        borderRadius: 16,
+                        padding: '16px'
+                      }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, color: '#1B5E20' }}>
+                          <Scissors size={18} />
+                          <strong style={{ fontSize: '0.9rem' }}>Fase 3: Potatura Foglie Danneggiate</strong>
+                        </div>
+                        <p style={{ margin: 0, fontSize: '0.85rem', color: '#666' }}>
+                          Rimuovi foglie secche o malate per favorire la crescita di nuove foglie sane.
+                        </p>
+                      </div>
+                    </>
+
