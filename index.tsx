@@ -1256,6 +1256,8 @@ interface PlantAnalysis {
   carePlan?: string;
   lastCareAt?: number;
   nextCheckAt?: number;
+  bloomImage?: string; // New field for bloom preview
+  bloomDescription?: string; // New field for bloom description
 }
 
 interface UserStats {
@@ -1917,6 +1919,24 @@ function App() {
             video: { facingMode: 'environment', width: { ideal: 1920 }, height: { ideal: 1080 } },
             audio: false
           });
+
+          // Luxmeter Simulation (Web API AmbientLightSensor is experimental/limited)
+          // We use video stream brightness as a proxy or real sensor if available
+          if ('AmbientLightSensor' in window) {
+            try {
+              const sensor = new (window as any).AmbientLightSensor();
+              sensor.onreading = () => setLightLevel(sensor.illuminance);
+              sensor.start();
+              lightSensorRef.current = sensor;
+              setLightSensorSupported(true);
+            } catch (e) {
+              console.warn("AmbientLightSensor failed", e);
+            }
+          } else {
+            // Fallback: simple brightness check from canvas (simplified)
+            // Executed during capture
+          }
+
           streamRef.current = currentStream;
           if (videoRef.current) {
             videoRef.current.srcObject = currentStream;
@@ -2485,7 +2505,7 @@ function App() {
         contents: {
           parts: [
             { inlineData: { data: capturedImg.split(',')[1], mimeType: 'image/jpeg' } },
-            { text: "Identifica questa pianta/fungo/frutto. Restituisci JSON: Nome comune, Scientifico, Categoria (Fungo, Succulenta, Erba Aromatica, Fiore, Albero, Pianta, Altro), Salute (healthy/sick), Diagnosi completa, Cura specifica. Lingua: Italiano." }
+            { text: "Identifica questa pianta/fungo/frutto. Restituisci JSON: Nome comune, Scientifico, Categoria (Fungo, Succulenta, Erba Aromatica, Fiore, Albero, Pianta, Altro), Salute (healthy/sick), Diagnosi completa. PER LA SEZIONE CURA: Fornisci consigli ESTESI, DETTAGLIATI e PRATICI (minimo 2 frasi per campo). Evita risposte generiche. Spiega QUANDO e QUANTO. - general: Esposizione luce (es. sole diretto, mezz'ombra), temperatura e umidità. - watering: Frequenza esatta estate/inverno e metodo (es. terreno asciutto). - pruning: Come e quando potare. - repotting: Quando rinvasare e tipo terreno. INOLTRE: Descrivi come sarà la fioritura di questa pianta (colore, forma, periodo) nel campo 'bloomDescription' (anche se è un frutto, descrivi i fiori). Lingua: Italiano." }
           ]
         },
         config: {
@@ -2507,9 +2527,10 @@ function App() {
                   repotting: { type: Type.STRING }
                 },
                 required: ['general', 'watering', 'pruning', 'repotting']
-              }
+              },
+              bloomDescription: { type: Type.STRING }
             },
-            required: ['name', 'scientificName', 'category', 'healthStatus', 'diagnosis', 'care']
+            required: ['name', 'scientificName', 'category', 'healthStatus', 'diagnosis', 'care', 'bloomDescription']
           }
         }
       });
@@ -2518,6 +2539,24 @@ function App() {
       setMessages(prev => [...prev, { role: 'analysis', data: entry }]);
       setHistory(prev => [entry, ...prev]);
       addXp(30);
+
+      // --- GENERAZIONE ANTEPRIMA FIORITURA ---
+      // Se la pianta può fiorire e abbiamo una descrizione, generiamo l'immagine
+      if (data.bloomDescription) {
+        // Piccola attesa per non sovraccaricare UX
+        setTimeout(async () => {
+          try {
+            // Utilizza Imagen (o DALL-E tramite proxy, qui usiamo Gemini per simulare o placeholder se non disponibile)
+            // Nota: Gemini Vision è multimodale in input, per output immagine serve endpoint specifico.
+            // Per ora, usiamo la descrizione testuale nel messaggio e un placeholder visuale o chiediamo a prompt di descrivere.
+            // Implementazione reale richiederebbe API immagine.
+            // Simuliamo salvataggio descrizione per UI.
+            console.log("🌸 Bloom Description:", data.bloomDescription);
+          } catch (e) {
+            console.error("Bloom generation failed", e);
+          }
+        }, 1000);
+      }
       checkQuests(entry); // Verifica completamento missioni
       setCapturedImg(null);
       setActiveMode('chat');
