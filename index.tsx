@@ -2,7 +2,7 @@
 import React, { useState, useRef, useEffect, useMemo, Component } from 'react';
 import { createRoot } from 'react-dom/client';
 import { GoogleGenAI, Type } from '@google/genai';
-import { Camera, Send, Sprout, Info, RefreshCw, MessageSquare, Droplets, AlertTriangle, CheckCircle2, Settings, Moon, Bell, Mountain, Sparkles, History, Share2, Trash2, Zap, ChevronLeft, Key, ExternalLink, Trophy, Target, Gamepad2, Upload, User, ShieldAlert, Clock, Leaf, Apple, Layers, Maximize2, Terminal, ChevronRight, Star, Award, Sun, CameraOff, HelpCircle, ShieldCheck, Heart, LogOut, Mail, Code, Scissors, Inbox, Download, X, Home, BookOpen, Plus, Calendar, Flower, Flower2, TreePine, FileText, Package, Image as ImageIcon } from 'lucide-react';
+import { Camera, Send, Sprout, Info, RefreshCw, MessageSquare, Droplets, AlertTriangle, CheckCircle2, Settings, Moon, Bell, Mountain, Sparkles, History, Share2, Trash2, Zap, ChevronLeft, Key, ExternalLink, Trophy, Target, Gamepad2, Upload, User, ShieldAlert, Clock, Leaf, Apple, Layers, Maximize2, Terminal, ChevronRight, Star, Award, Sun, CameraOff, HelpCircle, ShieldCheck, Heart, LogOut, Mail, Code, Scissors, Inbox, Download, X, Home, BookOpen, Plus, Calendar, Flower, Flower2, TreePine, FileText, Package, Image as ImageIcon, Wand2, Lock, CheckCircle } from 'lucide-react';
 
 import {
   registerUsername,
@@ -3436,9 +3436,181 @@ function App() {
             )}
 
             {detailTab === 'cura' && (
-              <div style={{ textAlign: 'center', padding: 40, color: '#999' }}>
-                <Calendar size={48} style={{ opacity: 0.3, marginBottom: 16 }} />
-                <p>Piano di cura in arrivo...</p>
+              <div style={{ padding: 10 }}>
+                {isLoadingProgram ? (
+                  <div style={{ textAlign: 'center', padding: 40 }}>
+                    <RefreshCw size={32} className="spin" style={{ color: '#2E7D32', margin: '0 auto 16px' }} />
+                    <p style={{ color: '#666', fontWeight: 600 }}>Caricamento piano di cura...</p>
+                  </div>
+                ) : activeCareProgram?.program ? (
+                  <div className="animate-fade-in">
+                    <div style={{
+                      background: 'linear-gradient(135deg, #E8F5E9 0%, #C8E6C9 100%)',
+                      borderRadius: 24,
+                      padding: 24,
+                      marginBottom: 20,
+                      boxShadow: '0 8px 20px rgba(46, 125, 50, 0.15)'
+                    }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                          <div style={{ background: 'white', padding: 8, borderRadius: 12 }}>
+                            <Calendar size={24} color="#2E7D32" />
+                          </div>
+                          <div>
+                            <h3 style={{ margin: 0, color: '#1B5E20', fontSize: '1.2rem' }}>Programma Attivo</h3>
+                            <div style={{ fontSize: '0.8rem', color: '#2E7D32', fontWeight: 600 }}>
+                              Giorno {activeCareProgram.program.currentDay} di {activeCareProgram.program.totalDays}
+                            </div>
+                          </div>
+                        </div>
+                        <div className="badge-xp-large" style={{ background: 'white', color: '#2E7D32' }}>
+                          {activeCareProgram.program.progress}%
+                        </div>
+                      </div>
+
+                      {/* Progress Bar */}
+                      <div style={{ height: 8, background: 'rgba(255,255,255,0.5)', borderRadius: 4, overflow: 'hidden' }}>
+                        <div style={{
+                          height: '100%',
+                          width: `${activeCareProgram.program.progress}%`,
+                          background: '#2E7D32',
+                          borderRadius: 4,
+                          transition: 'width 0.5s ease'
+                        }} />
+                      </div>
+                    </div>
+
+                    <h4 style={{ margin: '0 0 16px 8px', color: '#555', textTransform: 'uppercase', fontSize: '0.8rem', letterSpacing: '0.05em' }}>Prossimi Checkpoint</h4>
+
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                      {activeCareProgram.program.checkpoints?.map((cp: any, idx: number) => {
+                        const isNext = !cp.completedAt && activeCareProgram.program.checkpoints.find((c: any) => !c.completedAt)?.id === cp.id;
+                        return (
+                          <div key={idx} style={{
+                            background: cp.completedAt ? '#F1F8E9' : isNext ? 'white' : '#f9f9f9',
+                            border: isNext ? '2px solid #2E7D32' : '1px solid #eee',
+                            borderRadius: 20,
+                            padding: 16,
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 16,
+                            opacity: cp.completedAt ? 0.7 : 1,
+                            position: 'relative'
+                          }}>
+                            <div style={{
+                              width: 32, height: 32, borderRadius: '50%',
+                              background: cp.completedAt ? '#2E7D32' : isNext ? '#2E7D32' : '#ddd',
+                              color: 'white',
+                              display: 'flex', alignItems: 'center', justifyContent: 'center',
+                              fontSize: '0.9rem', fontWeight: 700,
+                              flexShrink: 0
+                            }}>
+                              {cp.day}
+                            </div>
+                            <div style={{ flex: 1 }}>
+                              <div style={{ fontWeight: 700, color: '#333', fontSize: '1rem' }}>Giorno {cp.day}</div>
+                              <div style={{ fontSize: '0.8rem', color: '#666' }}>Controllo salute e nuova foto</div>
+                            </div>
+                            {cp.completedAt ? (
+                              <CheckCircle size={24} color="#2E7D32" />
+                            ) : isNext ? (
+                              <button
+                                onClick={() => {
+                                  /* Logic to complete checkpoint */
+                                  alert("Funzione completamento checkpoint in arrivo!");
+                                }}
+                                style={{
+                                  background: '#2E7D32', color: 'white', border: 'none',
+                                  padding: '8px 16px', borderRadius: 100, fontWeight: 700,
+                                  fontSize: '0.8rem', cursor: 'pointer'
+                                }}
+                              >
+                                AVVIA
+                              </button>
+                            ) : (
+                              <Lock size={20} color="#ccc" />
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ) : (
+                  <div style={{ textAlign: 'center', padding: '40px 20px' }}>
+                    <div style={{
+                      width: 80, height: 80, borderRadius: '50%', background: '#F1F8E9',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      margin: '0 auto 20px', color: '#2E7D32'
+                    }}>
+                      <Sparkles size={40} />
+                    </div>
+                    <h3 style={{ margin: '0 0 10px 0', fontSize: '1.4rem' }}>Crea Piano di Cura AI</h3>
+                    <p style={{ marginBottom: 24, color: '#666', lineHeight: 1.5 }}>
+                      L'Intelligenza Artificiale analizzerà la tua {fullScreenAnalysis.name} e genererà un
+                      percorso di 30 giorni per portarla al massimo splendore.
+                    </p>
+
+                    <button
+                      onClick={async () => {
+                        setIsGeneratingPlan(true);
+                        try {
+                          if (!username) {
+                            setAchievementToast("❌ Devi essere registrato per creare un piano");
+                            setTimeout(() => setAchievementToast(null), 3000);
+                            return;
+                          }
+
+                          // Ensure fetching feedback
+                          setAchievementToast("⏳ Generazione piano AI in corso...");
+
+                          const res = await createCareProgram(
+                            fullScreenAnalysis.id,
+                            username,
+                            fullScreenAnalysis.healthStatus === 'healthy' ? 80 : 40,
+                            lightLevel || 500, // Fallback if no sensor
+                            fullScreenAnalysis.image,
+                            fullScreenAnalysis.name,
+                            fullScreenAnalysis.scientificName
+                          );
+
+                          if (res.success) {
+                            setActiveCareProgram(res);
+                            setAchievementToast("✅ Piano creato con successo!");
+                          } else {
+                            setAchievementToast("❌ Errore: " + (res.error || "Sconosciuto"));
+                          }
+                        } catch (e) {
+                          console.error(e);
+                          setAchievementToast("❌ Errore connessione");
+                        } finally {
+                          setIsGeneratingPlan(false);
+                          setTimeout(() => setAchievementToast(null), 3000);
+                        }
+                      }}
+                      disabled={isGeneratingPlan}
+                      style={{
+                        background: 'linear-gradient(135deg, #2E7D32 0%, #1B5E20 100%)',
+                        color: 'white',
+                        border: 'none',
+                        padding: '16px 32px',
+                        borderRadius: 100,
+                        fontSize: '1rem',
+                        fontWeight: 800,
+                        cursor: isGeneratingPlan ? 'wait' : 'pointer',
+                        opacity: isGeneratingPlan ? 0.8 : 1,
+                        boxShadow: '0 10px 25px rgba(46, 125, 50, 0.4)',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10,
+                        width: '100%'
+                      }}
+                    >
+                      {isGeneratingPlan ? <RefreshCw className="spin" /> : <Wand2 size={20} />}
+                      {isGeneratingPlan ? 'GENERAZIONE...' : 'GENERA PIANO GRATUITO'}
+                    </button>
+                    <p style={{ marginTop: 16, fontSize: '0.75rem', opacity: 0.5 }}>
+                      *Richiede connessione internet • Potenziato da Google Gemini
+                    </p>
+                  </div>
+                )}
               </div>
             )}
 
@@ -5448,7 +5620,7 @@ interface ErrorBoundaryState {
   error: any;
 }
 
-class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundaryState> {
+class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
   constructor(props: ErrorBoundaryProps) {
     super(props);
     this.state = { hasError: false, error: null };
