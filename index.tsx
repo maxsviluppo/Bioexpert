@@ -3188,11 +3188,22 @@ function App() {
                             diagnosis: m.data.diagnosis
                           });
                           if (res.success) {
+                            // Update local state with real DB ID
+                            if (res.data && res.data.id) {
+                              setMessages(prev => prev.map((msg, idx) => {
+                                if (idx === i && msg.role === 'analysis' && msg.data) {
+                                  return { ...msg, data: { ...msg.data, id: res.data.id } };
+                                }
+                                return msg;
+                              }));
+                            }
+
                             btn.innerHTML = '✅ Salvato!';
                             btn.style.background = '#e8f5e9';
                             btn.style.color = '#2e7d32';
                           } else {
                             btn.innerHTML = '❌ Errore';
+                            if (res.error && res.error.includes('User')) btn.innerHTML = '⚠️ Login?';
                             btn.disabled = false;
                           }
                         } catch (err) {

@@ -91,8 +91,8 @@ export default async function handler(request, response) {
                 return response.status(400).json({ error: 'Dati richiesti mancanti: id or username' });
             }
 
-            // Convert id to int if it's a string, to be safe with Postgres
-            const plantId = typeof id === 'string' ? parseInt(id) : id;
+            // ID is now UUID, so no need to parse as int
+            const plantId = id;
 
             const result = await pool.query('DELETE FROM user_plants WHERE id = $1 AND username = $2 RETURNING id', [plantId, username]);
 
