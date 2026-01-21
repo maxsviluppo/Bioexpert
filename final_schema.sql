@@ -173,7 +173,7 @@ ORDER BY table_name;
 -- Tabella programmi di cura
 CREATE TABLE IF NOT EXISTS plant_care_programs (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  plant_id UUID REFERENCES user_plants(id) ON DELETE CASCADE,
+  plant_id VARCHAR(100) NOT NULL,
   username VARCHAR(50) REFERENCES users(username) ON DELETE CASCADE,
   status VARCHAR(20) DEFAULT 'active', -- 'active', 'completed', 'paused', 'cancelled'
   program_type VARCHAR(20) DEFAULT 'recovery', -- 'recovery' (4 fasi), 'maintenance' (2 fasi)
@@ -241,7 +241,7 @@ CREATE TABLE IF NOT EXISTS care_checkpoints (
   health_score INTEGER, -- Analisi AI
   
   -- Feedback AI
-  ai_analysis TEXT,
+  ai_analysis JSONB,
   ai_recommendations TEXT,
   improvements_detected TEXT[], -- Array di miglioramenti rilevati
   
@@ -305,7 +305,7 @@ SELECT
   p.start_date,
   p.estimated_completion_date
 FROM plant_care_programs p
-JOIN user_plants up ON p.plant_id = up.id
+JOIN user_plants up ON p.plant_id::text = up.id::text
 WHERE p.status = 'active';
 
 -- Funzione per aggiornare timestamp
