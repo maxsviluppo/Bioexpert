@@ -1,4 +1,3 @@
-
 import React, { useState, useRef, useEffect, useMemo, Component } from 'react';
 import { createRoot } from 'react-dom/client';
 import { GoogleGenAI, Type } from '@google/genai';
