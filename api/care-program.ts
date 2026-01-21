@@ -30,6 +30,7 @@ async function createProgram(req: VercelRequest, res: VercelResponse) {
         return res.status(405).json({ error: 'Method not allowed' });
     }
 
+    const body = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
     const {
         plantId,
         username,
@@ -38,7 +39,7 @@ async function createProgram(req: VercelRequest, res: VercelResponse) {
         photoInitialUrl,
         plantName,
         scientificName
-    } = req.body;
+    } = body;
 
     if (!plantId || !username) {
         return res.status(400).json({ error: 'Missing required fields' });

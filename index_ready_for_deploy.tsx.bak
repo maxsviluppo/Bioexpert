@@ -24,7 +24,10 @@ import {
   clearLocalUsername,
   captureImageAsBase64,
   fetchUserInfo,
-  updateUserInfo
+  updateUserInfo,
+  createCareProgram,
+  getCareProgram,
+  completeCheckpoint
 } from './apiClient';
 
 // Helper per Gemini (se non già presente)
@@ -1253,8 +1256,6 @@ interface PlantAnalysis {
   carePlan?: string;
   lastCareAt?: number;
   nextCheckAt?: number;
-  bloomImage?: string; // New field for bloom preview
-  bloomDescription?: string; // New field for bloom description
 }
 
 interface UserStats {
@@ -1429,6 +1430,7 @@ function App() {
   const [careHistory, setCareHistory] = useState<any[]>([]);
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
   const [detailTab, setDetailTab] = useState<'info' | 'care' | 'history'>('info');
+  const [isGeneratingPlan, setIsGeneratingPlan] = useState(false);
   const [itemToDelete, setItemToDelete] = useState<string | null>(null);
   const [plantPhotos, setPlantPhotos] = useState<any[]>([]);
   const [selectedPhotoId, setSelectedPhotoId] = useState<string | null>(null);
@@ -1438,7 +1440,12 @@ function App() {
   const [lightSensorSupported, setLightSensorSupported] = useState(false);
   const lightSensorRef = useRef<any>(null);
 
-  // Stati per sistema di cura progressivo - RIMOSSI
+  // Stati per sistema di cura progressivo
+  const [activeCareProgram, setActiveCareProgram] = useState<any>(null);
+  const [isLoadingProgram, setIsLoadingProgram] = useState(false);
+  const [isCheckpointMode, setIsCheckpointMode] = useState(false);
+  const [currentCheckpoint, setCurrentCheckpoint] = useState<any>(null);
+  const [showCareProgramDashboard, setShowCareProgramDashboard] = useState(false);
 
   const [confirmToast, setConfirmToast] = useState<{ message: string, onConfirm: () => void, onCancel: () => void } | null>(null);
   const lastLeaderboardFetch = useRef<number>(0);
@@ -1527,7 +1534,30 @@ function App() {
     }
   };
 
-  // Funzione loadCareProgram RIMOSSA - Piano di cura non più disponibile
+  // Carica programma di cura per una pianta
+  const loadCareProgram = async (plantId: string) => {
+    setIsLoadingProgram(true);
+    try {
+      const result = await getCareProgram(plantId);
+      if (result.success && result.program) {
+        setActiveCareProgram(result);
+      } else {
+        setActiveCareProgram(null);
+      }
+    } catch (error) {
+      console.error('Error loading care program:', error);
+      setActiveCareProgram(null);
+    } finally {
+      setIsLoadingProgram(false);
+    }
+  };
+
+  // Carica programma di cura quando si apre dettaglio pianta
+  useEffect(() => {
+    if (fullScreenAnalysis?.id && fullScreenAnalysis.source === 'garden') {
+      loadCareProgram(fullScreenAnalysis.id);
+    }
+  }, [fullScreenAnalysis?.id]);
 
   useEffect(() => {
     if (activeGame === 'beauty_contest' || activeGame?.startsWith('weekly_') || isLeaderboardOpen) {
@@ -1859,7 +1889,8 @@ function App() {
       fetchCareHistory(fullScreenAnalysis.id);
       fetchPhotos(fullScreenAnalysis.id);
 
-      // loadCareProgram RIMOSSO - Piano di cura non più disponibile
+      // Carica programma di cura se esiste
+      loadCareProgram(fullScreenAnalysis.id);
     }
   }, [fullScreenAnalysis?.id]);
 
@@ -1886,24 +1917,6 @@ function App() {
             video: { facingMode: 'environment', width: { ideal: 1920 }, height: { ideal: 1080 } },
             audio: false
           });
-
-          // Luxmeter Simulation (Web API AmbientLightSensor is experimental/limited)
-          // We use video stream brightness as a proxy or real sensor if available
-          if ('AmbientLightSensor' in window) {
-            try {
-              const sensor = new (window as any).AmbientLightSensor();
-              sensor.onreading = () => setLightLevel(sensor.illuminance);
-              sensor.start();
-              lightSensorRef.current = sensor;
-              setLightSensorSupported(true);
-            } catch (e) {
-              console.warn("AmbientLightSensor failed", e);
-            }
-          } else {
-            // Fallback: simple brightness check from canvas (simplified)
-            // Executed during capture
-          }
-
           streamRef.current = currentStream;
           if (videoRef.current) {
             videoRef.current.srcObject = currentStream;
@@ -2344,7 +2357,95 @@ function App() {
   };
 
   const capture = async () => {
-    // ========== MODALITÀ CHECKPOINT RIMOSSA ==========
+    // ========== MODALITÀ CHECKPOINT ==========
+    if (isCheckpointMode) {
+      if (!videoRef.current || !canvasRef.current) return;
+
+      const c = canvasRef.current;
+      const v = videoRef.current;
+      const size = Math.min(v.videoWidth, v.videoHeight);
+      const startX = (v.videoWidth - size) / 2;
+      const startY = (v.videoHeight - size) / 2;
+      c.width = 1024;
+      c.height = 1024;
+      c.getContext('2d')?.drawImage(v, startX, startY, size, size, 0, 0, 1024, 1024);
+      const photo = c.toDataURL('image/jpeg');
+
+      setIsCameraOn(false);
+      setIsAnalyzing(true);
+
+      try {
+        // Analisi AI
+        const ai = new GoogleGenAI({ apiKey: GEMINI_KEY });
+        const res = await ai.models.generateContent({
+          model: 'gemini-2.0-flash-exp',
+          contents: {
+            parts: [
+              { inlineData: { data: photo.split(',')[1], mimeType: 'image/jpeg' } },
+              { text: "Analizza questa pianta. Restituisci JSON con: healthScore (0-100), improvements (array di miglioramenti rilevati), recommendations (consigli)." }
+            ]
+          },
+          config: {
+            responseMimeType: "application/json",
+            responseSchema: {
+              type: Type.OBJECT,
+              properties: {
+                healthScore: { type: Type.NUMBER },
+                improvements: { type: Type.ARRAY, items: { type: Type.STRING } },
+                recommendations: { type: Type.STRING }
+              }
+            }
+          }
+        });
+
+        const aiAnalysis = JSON.parse(res.text || '{}');
+
+        // Se è il primo checkpoint (creazione programma)
+        if (!activeCareProgram && fullScreenAnalysis) {
+          const result = await createCareProgram(
+            fullScreenAnalysis.id,
+            username!,
+            aiAnalysis.healthScore,
+            lightLevel || 0,
+            photo,
+            fullScreenAnalysis.name,
+            fullScreenAnalysis.scientificName
+          );
+
+          if (result.success) {
+            setAchievementToast('🎉 Programma di cura creato con successo!');
+            await loadCareProgram(fullScreenAnalysis.id);
+          }
+        } else if (currentCheckpoint) {
+          // Completa checkpoint esistente
+          const result = await completeCheckpoint(
+            currentCheckpoint.id,
+            photo,
+            lightLevel || 0,
+            aiAnalysis
+          );
+
+          if (result.success) {
+            setAchievementToast(result.message || '✅ Checkpoint completato!');
+            if (fullScreenAnalysis) {
+              await loadCareProgram(fullScreenAnalysis.id);
+            }
+          }
+        }
+
+        setIsCheckpointMode(false);
+        setCurrentCheckpoint(null);
+        setActiveMode('garden');
+
+      } catch (e) {
+        alert("Errore analisi checkpoint.");
+      } finally {
+        setIsAnalyzing(false);
+      }
+
+      return;
+    }
+    // ========== FINE MODALITÀ CHECKPOINT ==========
 
     const quest = QUESTS.find(q => q.id === activeGame);
     if (activeGame && (quest?.type === 'photo' || quest?.type === 'beauty')) {
@@ -2384,7 +2485,7 @@ function App() {
         contents: {
           parts: [
             { inlineData: { data: capturedImg.split(',')[1], mimeType: 'image/jpeg' } },
-            { text: "Identifica questa pianta/fungo/frutto. Restituisci JSON: Nome comune, Scientifico, Categoria (Fungo, Succulenta, Erba Aromatica, Fiore, Albero, Pianta, Altro), Salute (healthy/sick), Diagnosi completa. PER LA SEZIONE CURA: È IMPERATIVO fornire consigli ESTESI, DETTAGLIATI e PRATICI (almeno 4-5 frasi complete per ogni campo). NON ESSERE BREVE. Spiega i 'perché', 'come', 'quando' e 'quanto' in dettaglio. - general: Esposizione luce (es. sole diretto, mezz'ombra), temperatura min/max e umidità ideale. - watering: Frequenza esatta estate/inverno, metodo (es. immersione o dall'alto) e segnali di sete. - pruning: Istruzioni precise su come e quando potare. - repotting: Quando rinvasare, che vaso usare e composizione esatta del terriccio. INOLTRE: Descrivi come sarà la fioritura di questa pianta (colore, forma, periodo) nel campo 'bloomDescription'. Lingua: Italiano." }
+            { text: "Identifica questa pianta/fungo/frutto. Restituisci JSON: Nome comune, Scientifico, Categoria (Fungo, Succulenta, Erba Aromatica, Fiore, Albero, Pianta, Altro), Salute (healthy/sick), Diagnosi completa, Cura specifica. Lingua: Italiano." }
           ]
         },
         config: {
@@ -2406,10 +2507,9 @@ function App() {
                   repotting: { type: Type.STRING }
                 },
                 required: ['general', 'watering', 'pruning', 'repotting']
-              },
-              bloomDescription: { type: Type.STRING }
+              }
             },
-            required: ['name', 'scientificName', 'category', 'healthStatus', 'diagnosis', 'care', 'bloomDescription']
+            required: ['name', 'scientificName', 'category', 'healthStatus', 'diagnosis', 'care']
           }
         }
       });
@@ -2418,24 +2518,6 @@ function App() {
       setMessages(prev => [...prev, { role: 'analysis', data: entry }]);
       setHistory(prev => [entry, ...prev]);
       addXp(30);
-
-      // --- GENERAZIONE ANTEPRIMA FIORITURA ---
-      // Se la pianta può fiorire e abbiamo una descrizione, generiamo l'immagine
-      if (data.bloomDescription) {
-        // Piccola attesa per non sovraccaricare UX
-        setTimeout(async () => {
-          try {
-            // Utilizza Imagen (o DALL-E tramite proxy, qui usiamo Gemini per simulare o placeholder se non disponibile)
-            // Nota: Gemini Vision è multimodale in input, per output immagine serve endpoint specifico.
-            // Per ora, usiamo la descrizione testuale nel messaggio e un placeholder visuale o chiediamo a prompt di descrivere.
-            // Implementazione reale richiederebbe API immagine.
-            // Simuliamo salvataggio descrizione per UI.
-            console.log("🌸 Bloom Description:", data.bloomDescription);
-          } catch (e) {
-            console.error("Bloom generation failed", e);
-          }
-        }, 1000);
-      }
       checkQuests(entry); // Verifica completamento missioni
       setCapturedImg(null);
       setActiveMode('chat');
@@ -3067,22 +3149,11 @@ function App() {
                             diagnosis: m.data.diagnosis
                           });
                           if (res.success) {
-                            // Update local state with real DB ID
-                            if (res.data && res.data.id) {
-                              setMessages(prev => prev.map((msg, idx) => {
-                                if (idx === i && msg.role === 'analysis' && msg.data) {
-                                  return { ...msg, data: { ...msg.data, id: res.data.id } };
-                                }
-                                return msg;
-                              }));
-                            }
-
                             btn.innerHTML = '✅ Salvato!';
                             btn.style.background = '#e8f5e9';
                             btn.style.color = '#2e7d32';
                           } else {
                             btn.innerHTML = '❌ Errore';
-                            if (res.error && res.error.includes('User')) btn.innerHTML = '⚠️ Login?';
                             btn.disabled = false;
                           }
                         } catch (err) {
@@ -3236,14 +3307,14 @@ function App() {
             </div>
           </div>
 
-          {/* Tab Navigation - Rimossa tab CURA */}
+          {/* Tab Navigation */}
           <div style={{
             display: 'flex',
             gap: 8,
             padding: '16px 20px',
             borderBottom: '1px solid #e0e0e0'
           }}>
-            {['INFO'].map((tab) => (
+            {['INFO', 'CURA'].map((tab) => (
               <button
                 key={tab}
                 onClick={() => setDetailTab(tab.toLowerCase() as any)}
@@ -3364,7 +3435,184 @@ function App() {
               </>
             )}
 
-            {/* Rimossa sezione CURA - Piano di cura non più disponibile */}
+            {detailTab === 'cura' && (
+              <div style={{ padding: 10 }}>
+                {isLoadingProgram ? (
+                  <div style={{ textAlign: 'center', padding: 40 }}>
+                    <RefreshCw size={32} className="spin" style={{ color: '#2E7D32', margin: '0 auto 16px' }} />
+                    <p style={{ color: '#666', fontWeight: 600 }}>Caricamento piano di cura...</p>
+                  </div>
+                ) : activeCareProgram?.program ? (
+                  <div className="animate-fade-in">
+                    <div style={{
+                      background: 'linear-gradient(135deg, #E8F5E9 0%, #C8E6C9 100%)',
+                      borderRadius: 24,
+                      padding: 24,
+                      marginBottom: 20,
+                      boxShadow: '0 8px 20px rgba(46, 125, 50, 0.15)'
+                    }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                          <div style={{ background: 'white', padding: 8, borderRadius: 12 }}>
+                            <Calendar size={24} color="#2E7D32" />
+                          </div>
+                          <div>
+                            <h3 style={{ margin: 0, color: '#1B5E20', fontSize: '1.2rem' }}>Programma Attivo</h3>
+                            <div style={{ fontSize: '0.8rem', color: '#2E7D32', fontWeight: 600 }}>
+                              Giorno {activeCareProgram.program.currentDay} di {activeCareProgram.program.totalDays}
+                            </div>
+                          </div>
+                        </div>
+                        <div className="badge-xp-large" style={{ background: 'white', color: '#2E7D32' }}>
+                          {activeCareProgram.program.progress}%
+                        </div>
+                      </div>
+
+                      {/* Progress Bar */}
+                      <div style={{ height: 8, background: 'rgba(255,255,255,0.5)', borderRadius: 4, overflow: 'hidden' }}>
+                        <div style={{
+                          height: '100%',
+                          width: `${activeCareProgram.program.progress}%`,
+                          background: '#2E7D32',
+                          borderRadius: 4,
+                          transition: 'width 0.5s ease'
+                        }} />
+                      </div>
+                    </div>
+
+                    <h4 style={{ margin: '0 0 16px 8px', color: '#555', textTransform: 'uppercase', fontSize: '0.8rem', letterSpacing: '0.05em' }}>Prossimi Checkpoint</h4>
+
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                      {activeCareProgram.program.checkpoints?.map((cp: any, idx: number) => {
+                        const isNext = !cp.completedAt && activeCareProgram.program.checkpoints.find((c: any) => !c.completedAt)?.id === cp.id;
+                        return (
+                          <div key={idx} style={{
+                            background: cp.completedAt ? '#F1F8E9' : isNext ? 'white' : '#f9f9f9',
+                            border: isNext ? '2px solid #2E7D32' : '1px solid #eee',
+                            borderRadius: 20,
+                            padding: 16,
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 16,
+                            opacity: cp.completedAt ? 0.7 : 1,
+                            position: 'relative'
+                          }}>
+                            <div style={{
+                              width: 32, height: 32, borderRadius: '50%',
+                              background: cp.completedAt ? '#2E7D32' : isNext ? '#2E7D32' : '#ddd',
+                              color: 'white',
+                              display: 'flex', alignItems: 'center', justifyContent: 'center',
+                              fontSize: '0.9rem', fontWeight: 700,
+                              flexShrink: 0
+                            }}>
+                              {cp.day}
+                            </div>
+                            <div style={{ flex: 1 }}>
+                              <div style={{ fontWeight: 700, color: '#333', fontSize: '1rem' }}>Giorno {cp.day}</div>
+                              <div style={{ fontSize: '0.8rem', color: '#666' }}>Controllo salute e nuova foto</div>
+                            </div>
+                            {cp.completedAt ? (
+                              <CheckCircle size={24} color="#2E7D32" />
+                            ) : isNext ? (
+                              <button
+                                onClick={() => {
+                                  /* Logic to complete checkpoint */
+                                  alert("Funzione completamento checkpoint in arrivo!");
+                                }}
+                                style={{
+                                  background: '#2E7D32', color: 'white', border: 'none',
+                                  padding: '8px 16px', borderRadius: 100, fontWeight: 700,
+                                  fontSize: '0.8rem', cursor: 'pointer'
+                                }}
+                              >
+                                AVVIA
+                              </button>
+                            ) : (
+                              <Lock size={20} color="#ccc" />
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ) : (
+                  <div style={{ textAlign: 'center', padding: '40px 20px' }}>
+                    <div style={{
+                      width: 80, height: 80, borderRadius: '50%', background: '#F1F8E9',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      margin: '0 auto 20px', color: '#2E7D32'
+                    }}>
+                      <Sparkles size={40} />
+                    </div>
+                    <h3 style={{ margin: '0 0 10px 0', fontSize: '1.4rem' }}>Crea Piano di Cura AI</h3>
+                    <p style={{ marginBottom: 24, color: '#666', lineHeight: 1.5 }}>
+                      L'Intelligenza Artificiale analizzerà la tua {fullScreenAnalysis.name} e genererà un
+                      percorso di 30 giorni per portarla al massimo splendore.
+                    </p>
+
+                    <button
+                      onClick={async () => {
+                        setIsGeneratingPlan(true);
+                        try {
+                          if (!username) {
+                            setAchievementToast("❌ Devi essere registrato per creare un piano");
+                            setTimeout(() => setAchievementToast(null), 3000);
+                            return;
+                          }
+
+                          // Ensure fetching feedback
+                          setAchievementToast("⏳ Generazione piano AI in corso...");
+
+                          const res = await createCareProgram(
+                            fullScreenAnalysis.id,
+                            username,
+                            fullScreenAnalysis.healthStatus === 'healthy' ? 80 : 40,
+                            lightLevel || 500, // Fallback if no sensor
+                            fullScreenAnalysis.image,
+                            fullScreenAnalysis.name,
+                            fullScreenAnalysis.scientificName
+                          );
+
+                          if (res.success) {
+                            setActiveCareProgram(res);
+                            setAchievementToast("✅ Piano creato con successo!");
+                          } else {
+                            setAchievementToast("❌ Errore: " + (res.error || "Sconosciuto"));
+                          }
+                        } catch (e) {
+                          console.error(e);
+                          setAchievementToast("❌ Errore connessione");
+                        } finally {
+                          setIsGeneratingPlan(false);
+                          setTimeout(() => setAchievementToast(null), 3000);
+                        }
+                      }}
+                      disabled={isGeneratingPlan}
+                      style={{
+                        background: 'linear-gradient(135deg, #2E7D32 0%, #1B5E20 100%)',
+                        color: 'white',
+                        border: 'none',
+                        padding: '16px 32px',
+                        borderRadius: 100,
+                        fontSize: '1rem',
+                        fontWeight: 800,
+                        cursor: isGeneratingPlan ? 'wait' : 'pointer',
+                        opacity: isGeneratingPlan ? 0.8 : 1,
+                        boxShadow: '0 10px 25px rgba(46, 125, 50, 0.4)',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10,
+                        width: '100%'
+                      }}
+                    >
+                      {isGeneratingPlan ? <RefreshCw className="spin" /> : <Wand2 size={20} />}
+                      {isGeneratingPlan ? 'GENERAZIONE...' : 'GENERA PIANO GRATUITO'}
+                    </button>
+                    <p style={{ marginTop: 16, fontSize: '0.75rem', opacity: 0.5 }}>
+                      *Richiede connessione internet • Potenziato da Google Gemini
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
 
             {detailTab === 'album' && (
               <div style={{ textAlign: 'center', padding: 40, color: '#999' }}>
@@ -4468,7 +4716,250 @@ function App() {
               ) : detailTab === 'care' ? (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
 
-                  {/* Sistema di Cura Progressivo - RIMOSSO */}
+                  {/* Sistema di Cura Progressivo */}
+                  {activeCareProgram && activeCareProgram.program ? (
+                    // Dashboard Programma Attivo
+                    <div style={{
+                      padding: 24,
+                      background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                      borderRadius: 24,
+                      boxShadow: '0 10px 40px rgba(102, 126, 234, 0.3)',
+                      color: 'white'
+                    }}>
+
+                      {/* Progress Ring */}
+                      <div style={{ textAlign: 'center', marginBottom: 24 }}>
+                        <div style={{
+                          width: 140,
+                          height: 140,
+                          margin: '0 auto',
+                          borderRadius: '50%',
+                          background: `conic-gradient(#FFD700 ${activeCareProgram.program.completionPercentage || 0}%, rgba(255,255,255,0.2) 0)`,
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          position: 'relative',
+                          boxShadow: '0 8px 32px rgba(0,0,0,0.2)'
+                        }}>
+                          <div style={{
+                            width: 110,
+                            height: 110,
+                            borderRadius: '50%',
+                            background: 'rgba(255,255,255,0.95)',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            alignItems: 'center',
+                            justifyContent: 'center'
+                          }}>
+                            <div style={{ fontSize: '2.2rem', fontWeight: 900, color: '#667eea' }}>
+                              {activeCareProgram.program.completionPercentage || 0}%
+                            </div>
+                            <div style={{ fontSize: '0.7rem', opacity: 0.6, color: '#333' }}>Completato</div>
+                          </div>
+                        </div>
+                        <div style={{ marginTop: 16, fontSize: '1.1rem', fontWeight: 800, textShadow: '0 2px 4px rgba(0,0,0,0.2)' }}>
+                          🌿 Fase {activeCareProgram.program.current_phase} di {activeCareProgram.program.total_phases}
+                        </div>
+                        <div style={{ fontSize: '0.9rem', opacity: 0.9, marginTop: 4 }}>
+                          {activeCareProgram.currentPhase?.title || 'Caricamento...'}
+                        </div>
+                      </div>
+
+                      {/* Fase Corrente Card */}
+                      {activeCareProgram.currentPhase && (
+                        <div style={{
+                          background: 'rgba(255,255,255,0.15)',
+                          backdropFilter: 'blur(10px)',
+                          padding: 20,
+                          borderRadius: 20,
+                          marginBottom: 20,
+                          border: '1px solid rgba(255,255,255,0.2)'
+                        }}>
+                          <div style={{ fontWeight: 800, fontSize: '1rem', marginBottom: 8 }}>
+                            {activeCareProgram.currentPhase.title}
+                          </div>
+                          <div style={{ fontSize: '0.85rem', opacity: 0.9, lineHeight: 1.5 }}>
+                            {activeCareProgram.currentPhase.description}
+                          </div>
+                          <div style={{ fontSize: '0.75rem', marginTop: 12, opacity: 0.8 }}>
+                            ⏱️ Durata: {activeCareProgram.currentPhase.duration_days} giorni
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Azioni Checklist */}
+                      <div style={{ marginBottom: 20 }}>
+                        <h4 style={{ fontSize: '0.85rem', marginBottom: 12, opacity: 0.9, letterSpacing: '1px' }}>AZIONI DA COMPLETARE</h4>
+                        {activeCareProgram.currentPhase?.actions?.map((action: any, idx: number) => (
+                          <div key={idx} style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 12,
+                            padding: 14,
+                            background: 'rgba(255,255,255,0.1)',
+                            backdropFilter: 'blur(10px)',
+                            borderRadius: 16,
+                            marginBottom: 10,
+                            border: '1px solid rgba(255,255,255,0.15)'
+                          }}>
+                            <div style={{ fontSize: '1.4rem' }}>
+                              {action.type === 'water' ? '💧' :
+                                action.type === 'fertilize' ? '🌱' :
+                                  action.type === 'prune' ? '✂️' :
+                                    action.type === 'photo_check' ? '📸' : '✅'}
+                            </div>
+                            <div style={{ flex: 1 }}>
+                              <div style={{ fontSize: '0.9rem', fontWeight: 700 }}>{action.title}</div>
+                              <div style={{ fontSize: '0.75rem', opacity: 0.8 }}>
+                                {action.frequency === 'daily' ? 'Quotidiano' :
+                                  action.frequency === 'weekly' ? 'Settimanale' :
+                                    action.frequency === 'every_2_days' ? 'Ogni 2 giorni' :
+                                      action.frequency === 'every_3_days' ? 'Ogni 3 giorni' : 'Al bisogno'}
+                              </div>
+                            </div>
+                            <div style={{ fontSize: '0.8rem', fontWeight: 700, opacity: 0.7 }}>
+                              {action.completed || 0}/{action.total}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+
+                      {/* Prossimo Checkpoint */}
+                      {activeCareProgram.nextCheckpoint && (
+                        <div style={{
+                          background: 'rgba(255, 215, 0, 0.2)',
+                          backdropFilter: 'blur(10px)',
+                          padding: 16,
+                          borderRadius: 16,
+                          marginBottom: 16,
+                          border: '2px dashed rgba(255, 215, 0, 0.5)'
+                        }}>
+                          <div style={{ fontSize: '0.85rem', fontWeight: 700, marginBottom: 4 }}>
+                            📅 PROSSIMO CHECK FOTOGRAFICO
+                          </div>
+                          <div style={{ fontSize: '0.8rem', opacity: 0.9 }}>
+                            {new Date(activeCareProgram.nextCheckpoint.scheduled_date).toLocaleDateString('it-IT', {
+                              day: 'numeric',
+                              month: 'long',
+                              year: 'numeric'
+                            })}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Bottone Check Foto */}
+                      <button
+                        onClick={() => {
+                          setIsCheckpointMode(true);
+                          setCurrentCheckpoint(activeCareProgram.nextCheckpoint);
+                          setActiveMode('scan');
+                          setIsCameraOn(true);
+                        }}
+                        style={{
+                          width: '100%',
+                          background: 'linear-gradient(135deg, #FFD700 0%, #FFA500 100%)',
+                          color: '#333',
+                          border: 'none',
+                          padding: '18px',
+                          borderRadius: 100,
+                          fontWeight: 900,
+                          fontSize: '1.05rem',
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: 12,
+                          boxShadow: '0 6px 20px rgba(255, 215, 0, 0.4)',
+                          transition: 'transform 0.2s',
+                          textTransform: 'uppercase',
+                          letterSpacing: '1px'
+                        }}
+                        onMouseDown={(e) => e.currentTarget.style.transform = 'scale(0.95)'}
+                        onMouseUp={(e) => e.currentTarget.style.transform = 'scale(1)'}
+                      >
+                        <Camera size={22} /> FAI CHECK FOTO
+                      </button>
+
+                      {/* Statistiche */}
+                      <div style={{
+                        marginTop: 24,
+                        padding: 20,
+                        background: 'rgba(255,255,255,0.1)',
+                        backdropFilter: 'blur(10px)',
+                        borderRadius: 20,
+                        display: 'grid',
+                        gridTemplateColumns: '1fr 1fr 1fr',
+                        gap: 16,
+                        textAlign: 'center',
+                        border: '1px solid rgba(255,255,255,0.15)'
+                      }}>
+                        <div>
+                          <div style={{ fontSize: '1.6rem', fontWeight: 900, color: '#FFD700' }}>
+                            {activeCareProgram.stats?.healthImprovement > 0 ? '+' : ''}{activeCareProgram.stats?.healthImprovement || 0}%
+                          </div>
+                          <div style={{ fontSize: '0.7rem', opacity: 0.8, marginTop: 4 }}>Salute</div>
+                        </div>
+                        <div>
+                          <div style={{ fontSize: '1.6rem', fontWeight: 900, color: '#FFD700' }}>
+                            {activeCareProgram.stats?.completedCheckpoints || 0}/{activeCareProgram.stats?.totalCheckpoints || 0}
+                          </div>
+                          <div style={{ fontSize: '0.7rem', opacity: 0.8, marginTop: 4 }}>Checkpoint</div>
+                        </div>
+                        <div>
+                          <div style={{ fontSize: '1.6rem', fontWeight: 900, color: '#FFD700' }}>
+                            {activeCareProgram.stats?.daysActive || 0}
+                          </div>
+                          <div style={{ fontSize: '0.7rem', opacity: 0.8, marginTop: 4 }}>Giorni</div>
+                        </div>
+                      </div>
+
+                    </div>
+                  ) : (
+                    // Nessun Programma - Mostra Pulsante Avvio
+                    <div style={{
+                      padding: 32,
+                      background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                      borderRadius: 24,
+                      boxShadow: '0 10px 40px rgba(102, 126, 234, 0.3)',
+                      textAlign: 'center',
+                      color: 'white'
+                    }}>
+                      <div style={{ fontSize: '4rem', marginBottom: 16 }}>🌱</div>
+                      <h3 style={{ marginTop: 0, marginBottom: 12, fontSize: '1.4rem', fontWeight: 900 }}>
+                        Programma di Cura Personalizzato
+                      </h3>
+                      <p style={{ opacity: 0.9, fontSize: '0.95rem', lineHeight: 1.6, marginBottom: 24, maxWidth: '400px', margin: '0 auto 24px' }}>
+                        Avvia un programma di cura guidato con checkpoint fotografici, luxometro integrato e tracking del progresso.
+                      </p>
+                      <button
+                        onClick={async () => {
+                          if (!username || !fullScreenAnalysis) return;
+
+                          setAchievementToast('📸 Scatta una foto iniziale per iniziare...');
+                          setIsCheckpointMode(true);
+                          setActiveMode('scan');
+                          setIsCameraOn(true);
+                        }}
+                        style={{
+                          background: 'linear-gradient(135deg, #FFD700 0%, #FFA500 100%)',
+                          color: '#333',
+                          border: 'none',
+                          padding: '16px 32px',
+                          borderRadius: 100,
+                          fontWeight: 900,
+                          cursor: 'pointer',
+                          fontSize: '1rem',
+                          boxShadow: '0 6px 20px rgba(255, 215, 0, 0.4)',
+                          textTransform: 'uppercase',
+                          letterSpacing: '1px'
+                        }}
+                      >
+                        🚀 AVVIA PROGRAMMA DI RECUPERO
+                      </button>
+                    </div>
+                  )}
+
+
 
                   {/* Storico Recente */}
                   <div style={{ padding: 20, background: 'var(--white)', borderRadius: 28, border: '1px solid var(--card-border)' }}>
@@ -4579,8 +5070,12 @@ function App() {
 
               {fullScreenAnalysis.source === 'garden' ? (
                 <>
-                  <div style={{ marginTop: 24, display: 'grid', gridTemplateColumns: '1fr', gap: 10 }}>
-                    {/* Pulsante GESTISCI CURA rimosso */}
+                  <div style={{ marginTop: 24, display: 'grid', gridTemplateColumns: detailTab === 'info' ? '1fr 1fr' : '1fr', gap: 10 }}>
+                    {detailTab === 'info' && (
+                      <button className="btn-game-action" style={{ background: 'var(--primary-dark)', color: 'white', padding: 16, borderRadius: 16, border: 'none', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }} onClick={() => setDetailTab('care')}>
+                        <Calendar size={18} /> GESTISCI CURA
+                      </button>
+                    )}
                     <button className="btn-game-action" style={{ background: '#e0f7fa', color: '#006064', padding: 16, borderRadius: 16, border: 'none', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }} onClick={async () => {
                       if (!username || !fullScreenAnalysis?.id) return;
                       const nextDate = new Date();
