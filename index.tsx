@@ -24,7 +24,10 @@ import {
   clearLocalUsername,
   captureImageAsBase64,
   fetchUserInfo,
-  updateUserInfo
+  updateUserInfo,
+  createCareProgram,
+  getCareProgram,
+  completeCheckpoint
 } from './apiClient';
 
 // Helper per Gemini (se non già presente)
@@ -1376,7 +1379,7 @@ const QUIZ_QUESTIONS_3 = [
 
 
 function App() {
-  const [activeMode, setActiveMode] = useState<'scan' | 'chat' | 'garden' | 'care'>('scan');
+  const [activeMode, setActiveMode] = useState<'scan' | 'chat' | 'garden'>('scan');
   const [isCameraOn, setIsCameraOn] = useState(false);
   const [currentTip, setCurrentTip] = useState(() => BIO_TIPS[Math.floor(Math.random() * BIO_TIPS.length)]);
   const [cameraError, setCameraError] = useState<string | null>(null);
@@ -1423,13 +1426,13 @@ function App() {
   const [showAddToGardenConfirm, setShowAddToGardenConfirm] = useState(false);
   const [pendingPlant, setPendingPlant] = useState<PlantAnalysis | null>(null);
   const [userPlants, setUserPlants] = useState<any[]>([]);
-  const [carePlants, setCarePlants] = useState<any[]>([]);
   const [gardenTab, setGardenTab] = useState<'plants' | 'care' | 'notifications'>('plants');
   const [isGardenScanning, setIsGardenScanning] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [careHistory, setCareHistory] = useState<any[]>([]);
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
   const [detailTab, setDetailTab] = useState<'info' | 'care' | 'history'>('info');
+  const [isGeneratingPlan, setIsGeneratingPlan] = useState(false);
   const [itemToDelete, setItemToDelete] = useState<string | null>(null);
   const [plantPhotos, setPlantPhotos] = useState<any[]>([]);
   const [selectedPhotoId, setSelectedPhotoId] = useState<string | null>(null);
@@ -1439,7 +1442,12 @@ function App() {
   const [lightSensorSupported, setLightSensorSupported] = useState(false);
   const lightSensorRef = useRef<any>(null);
 
-  // Stati per sistema di cura progressivo - RIMOSSI
+  // Stati per sistema di cura progressivo
+  const [activeCareProgram, setActiveCareProgram] = useState<any>(null);
+  const [isLoadingProgram, setIsLoadingProgram] = useState(false);
+  const [isCheckpointMode, setIsCheckpointMode] = useState(false);
+  const [currentCheckpoint, setCurrentCheckpoint] = useState<any>(null);
+  const [showCareProgramDashboard, setShowCareProgramDashboard] = useState(false);
 
   const [confirmToast, setConfirmToast] = useState<{ message: string, onConfirm: () => void, onCancel: () => void } | null>(null);
   const lastLeaderboardFetch = useRef<number>(0);
@@ -1528,7 +1536,30 @@ function App() {
     }
   };
 
-  // Funzione loadCareProgram RIMOSSA - Piano di cura non più disponibile
+  // Carica programma di cura per una pianta
+  const loadCareProgram = async (plantId: string) => {
+    setIsLoadingProgram(true);
+    try {
+      const result = await getCareProgram(plantId);
+      if (result.success && result.program) {
+        setActiveCareProgram(result);
+      } else {
+        setActiveCareProgram(null);
+      }
+    } catch (error) {
+      console.error('Error loading care program:', error);
+      setActiveCareProgram(null);
+    } finally {
+      setIsLoadingProgram(false);
+    }
+  };
+
+  // Carica programma di cura quando si apre dettaglio pianta
+  useEffect(() => {
+    if (fullScreenAnalysis?.id && fullScreenAnalysis.source === 'garden') {
+      loadCareProgram(fullScreenAnalysis.id);
+    }
+  }, [fullScreenAnalysis?.id]);
 
   useEffect(() => {
     if (activeGame === 'beauty_contest' || activeGame?.startsWith('weekly_') || isLeaderboardOpen) {
@@ -1860,7 +1891,8 @@ function App() {
       fetchCareHistory(fullScreenAnalysis.id);
       fetchPhotos(fullScreenAnalysis.id);
 
-      // loadCareProgram RIMOSSO - Piano di cura non più disponibile
+      // Carica programma di cura se esiste
+      loadCareProgram(fullScreenAnalysis.id);
     }
   }, [fullScreenAnalysis?.id]);
 
@@ -1924,100 +1956,6 @@ function App() {
     startCamera();
     return () => { if (currentStream) currentStream.getTracks().forEach(t => t.stop()); };
   }, [activeMode, capturedImg, isCameraOn, isSettingsOpen, isGamesOpen, isHistoryOpen, fullScreenAnalysis]);
-
-  // --- ANALISI AI SCAN (AGGIUNTO/RIPRISTINATO) ---
-  useEffect(() => {
-    const analyzeScan = async () => {
-      // Attiviamo solo in modalità scan, se abbiamo una foto appena scattata e non abbiamo ancora i risultati
-      if (capturedImg && activeMode === 'scan' && !isAnalyzing && !fullScreenAnalysis) {
-        setIsAnalyzing(true);
-        try {
-          const ai = new GoogleGenAI({ apiKey: GEMINI_KEY });
-
-          const prompt = `Analizza questa pianta fornendo consigli di cura ESTREMAMENTE DETTAGLIATI e ARGOMENTATI.
-          NON usare frasi brevi, liste scarne o risposte telegrafiche.
-          Per ogni sezione di cura (watering, general, pruning, repotting), scrivi un piccolo paragrafo (3-4 frasi) che spieghi dettagliatamente COSA fare e PERCHÉ, includendo sfumature stagionali o segnali da osservare. Sii educativo e professionale.
-
-          Restituisci un JSON valido con questa struttura:
-          {
-            "name": "Nome comune",
-            "scientificName": "Nome scientifico",
-            "healthStatus": "healthy" | "sick" | "unknown",
-            "diagnosis": "Diagnosi dettagliata",
-            "category": "Categoria pianta",
-            "care": {
-              "watering": "Testo ESTESO su irrigazione...",
-              "general": "Testo ESTESO su luce/ambiente...",
-              "pruning": "Testo ESTESO su potatura...",
-              "repotting": "Testo ESTESO su rinvaso..."
-            }
-          }`;
-
-          const res = await ai.models.generateContent({
-            model: 'gemini-1.5-flash',
-            contents: {
-              parts: [
-                { inlineData: { data: capturedImg.split(',')[1], mimeType: 'image/jpeg' } },
-                { text: prompt }
-              ]
-            },
-            config: {
-              responseMimeType: "application/json",
-              responseSchema: {
-                type: Type.OBJECT,
-                properties: {
-                  name: { type: Type.STRING },
-                  scientificName: { type: Type.STRING },
-                  healthStatus: { type: Type.STRING, enum: ["healthy", "sick", "unknown"] },
-                  diagnosis: { type: Type.STRING },
-                  category: { type: Type.STRING },
-                  care: {
-                    type: Type.OBJECT,
-                    properties: {
-                      watering: { type: Type.STRING },
-                      general: { type: Type.STRING },
-                      pruning: { type: Type.STRING },
-                      repotting: { type: Type.STRING }
-                    },
-                    required: ["watering", "general", "pruning", "repotting"]
-                  }
-                }
-              }
-            }
-          });
-
-          const data = JSON.parse(res.text || '{}');
-
-          setFullScreenAnalysis({
-            id: crypto.randomUUID(),
-            timestamp: Date.now(),
-            image: capturedImg,
-            name: data.name || 'Pianta Sconosciuta',
-            scientificName: data.scientificName || '',
-            healthStatus: (data.healthStatus as any) || 'unknown',
-            diagnosis: data.diagnosis || 'Analisi completata.',
-            care: {
-              watering: data.care?.watering || 'Mantieni il terreno umido ma non zuppo.',
-              general: data.care?.general || 'Luce brillante indiretta.',
-              pruning: data.care?.pruning || 'Rimuovere foglie secche.',
-              repotting: data.care?.repotting || 'Rinvasare quando le radici riempiono il vaso.'
-            },
-            category: data.category || 'Pianta',
-            source: 'analysis'
-          });
-
-        } catch (e) {
-          console.error("Errore analisi AI:", e);
-          alert("Si è verificato un errore durante l'analisi. Riprova.");
-          setCapturedImg(null);
-        } finally {
-          setIsAnalyzing(false);
-        }
-      }
-    };
-
-    analyzeScan();
-  }, [capturedImg, activeMode]);
 
   const addXp = (amount: number) => {
     setXp(prevXp => {
@@ -2439,7 +2377,95 @@ function App() {
   };
 
   const capture = async () => {
-    // ========== MODALITÀ CHECKPOINT RIMOSSA ==========
+    // ========== MODALITÀ CHECKPOINT ==========
+    if (isCheckpointMode) {
+      if (!videoRef.current || !canvasRef.current) return;
+
+      const c = canvasRef.current;
+      const v = videoRef.current;
+      const size = Math.min(v.videoWidth, v.videoHeight);
+      const startX = (v.videoWidth - size) / 2;
+      const startY = (v.videoHeight - size) / 2;
+      c.width = 1024;
+      c.height = 1024;
+      c.getContext('2d')?.drawImage(v, startX, startY, size, size, 0, 0, 1024, 1024);
+      const photo = c.toDataURL('image/jpeg');
+
+      setIsCameraOn(false);
+      setIsAnalyzing(true);
+
+      try {
+        // Analisi AI
+        const ai = new GoogleGenAI({ apiKey: GEMINI_KEY });
+        const res = await ai.models.generateContent({
+          model: 'gemini-2.0-flash-exp',
+          contents: {
+            parts: [
+              { inlineData: { data: photo.split(',')[1], mimeType: 'image/jpeg' } },
+              { text: "Analizza questa pianta. Restituisci JSON con: healthScore (0-100), improvements (array di miglioramenti rilevati), recommendations (consigli)." }
+            ]
+          },
+          config: {
+            responseMimeType: "application/json",
+            responseSchema: {
+              type: Type.OBJECT,
+              properties: {
+                healthScore: { type: Type.NUMBER },
+                improvements: { type: Type.ARRAY, items: { type: Type.STRING } },
+                recommendations: { type: Type.STRING }
+              }
+            }
+          }
+        });
+
+        const aiAnalysis = JSON.parse(res.text || '{}');
+
+        // Se è il primo checkpoint (creazione programma)
+        if (!activeCareProgram && fullScreenAnalysis) {
+          const result = await createCareProgram(
+            fullScreenAnalysis.id,
+            username!,
+            aiAnalysis.healthScore,
+            lightLevel || 0,
+            photo,
+            fullScreenAnalysis.name,
+            fullScreenAnalysis.scientificName
+          );
+
+          if (result.success) {
+            setAchievementToast('🎉 Programma di cura creato con successo!');
+            await loadCareProgram(fullScreenAnalysis.id);
+          }
+        } else if (currentCheckpoint) {
+          // Completa checkpoint esistente
+          const result = await completeCheckpoint(
+            currentCheckpoint.id,
+            photo,
+            lightLevel || 0,
+            aiAnalysis
+          );
+
+          if (result.success) {
+            setAchievementToast(result.message || '✅ Checkpoint completato!');
+            if (fullScreenAnalysis) {
+              await loadCareProgram(fullScreenAnalysis.id);
+            }
+          }
+        }
+
+        setIsCheckpointMode(false);
+        setCurrentCheckpoint(null);
+        setActiveMode('garden');
+
+      } catch (e) {
+        alert("Errore analisi checkpoint.");
+      } finally {
+        setIsAnalyzing(false);
+      }
+
+      return;
+    }
+    // ========== FINE MODALITÀ CHECKPOINT ==========
 
     const quest = QUESTS.find(q => q.id === activeGame);
     if (activeGame && (quest?.type === 'photo' || quest?.type === 'beauty')) {
@@ -2479,7 +2505,34 @@ function App() {
         contents: {
           parts: [
             { inlineData: { data: capturedImg.split(',')[1], mimeType: 'image/jpeg' } },
-            { text: "Identifica questa pianta/fungo/frutto. Restituisci JSON: Nome comune, Scientifico, Categoria (Fungo, Succulenta, Erba Aromatica, Fiore, Albero, Pianta, Altro), Salute (healthy/sick), Diagnosi completa. PER LA SEZIONE CURA: È IMPERATIVO fornire consigli ESTESI, DETTAGLIATI e PRATICI (almeno 4-5 frasi complete per ogni campo). NON ESSERE BREVE. Spiega i 'perché', 'come', 'quando' e 'quanto' in dettaglio. - general: Esposizione luce (es. sole diretto, mezz'ombra), temperatura min/max e umidità ideale. - watering: Frequenza esatta estate/inverno, metodo (es. immersione o dall'alto) e segnali di sete. - pruning: Istruzioni precise su come e quando potare. - repotting: Quando rinvasare, che vaso usare e composizione esatta del terriccio. INOLTRE: Descrivi come sarà la fioritura di questa pianta (colore, forma, periodo) nel campo 'bloomDescription'. Lingua: Italiano." }
+            {
+              text: `Identifica questa pianta/fungo/frutto e ANALIZZA ATTENTAMENTE LO STATO DALLA FOTO.
+
+Restituisci JSON con:
+- name: Nome comune italiano
+- scientificName: Nome scientifico latino  
+- category: Categoria (Fungo/Succulenta/Erba Aromatica/Fiore/Albero/Pianta/Frutto/Ortaggio/Altro)
+- healthStatus: healthy/sick/unknown (BASATO sulla foto)
+- diagnosis: Diagnosi DETTAGLIATA (3-4 frasi) basata su ciò che VEDI nella foto. Se malata, descrivi i sintomi visibili.
+
+SEZIONE CURA - Consigli SPECIFICI per QUESTA pianta (3-4 frasi per campo):
+- general: Esposizione luce ideale, temperature MIN/MAX, umidità, posizione in casa.
+- watering: Frequenza ESATTA estate/inverno, quantità, metodo, segnali problemi.
+- pruning: QUANDO e COME potare, frequenza, cosa rimuovere.
+- repotting: Ogni quanti anni, periodo, tipo terriccio, dimensione vaso.
+
+SEZIONE careTips - CONSIGLI PRATICI PERSONALIZZATI basati su ciò che VEDI nella foto:
+- wateringTip: Consiglio SPECIFICO sull'irrigazione basato sullo stato attuale (es. se foglie flosce suggerisci più acqua, se gialle meno).
+- lightTip: Consiglio SPECIFICO sulla luce basato su ciò che osservi (es. se foglie pallide servce più luce).
+- pruningTip: Consiglio SPECIFICO di potatura basato sullo stato (es. se ci sono foglie secche, rami morti).
+- generalTip: Consiglio generale URGENTE se la pianta ha problemi, o suggerimento per mantenerla sana.
+
+Se la pianta è SANA, i careTips devono essere consigli per MANTENERLA tale.
+Se la pianta è MALATA, i careTips devono essere INTERVENTI URGENTI specifici.
+
+- bloomDescription: Descrizione fioritura o fogliame decorativo.
+
+Lingua: ITALIANO. Sii SPECIFICO per questa pianta e il suo stato attuale.` }
           ]
         },
         config: {
@@ -2502,9 +2555,19 @@ function App() {
                 },
                 required: ['general', 'watering', 'pruning', 'repotting']
               },
+              careTips: {
+                type: Type.OBJECT,
+                properties: {
+                  wateringTip: { type: Type.STRING },
+                  lightTip: { type: Type.STRING },
+                  pruningTip: { type: Type.STRING },
+                  generalTip: { type: Type.STRING }
+                },
+                required: ['wateringTip', 'lightTip', 'pruningTip', 'generalTip']
+              },
               bloomDescription: { type: Type.STRING }
             },
-            required: ['name', 'scientificName', 'category', 'healthStatus', 'diagnosis', 'care', 'bloomDescription']
+            required: ['name', 'scientificName', 'category', 'healthStatus', 'diagnosis', 'care', 'careTips', 'bloomDescription']
           }
         }
       });
@@ -2585,7 +2648,7 @@ function App() {
     ];
   }, [lastPlantName]);
 
-  return (<>
+  return (
     <div className="app-shell">
       <style>{styles}</style>
 
@@ -3136,104 +3199,6 @@ function App() {
                 </div>
               )}
             </div>
-          ) : activeMode === 'care' ? (
-            <div style={{ height: '100%', width: '100%', background: 'var(--bg-warm)', overflowY: 'auto', padding: 20 }}>
-              <h2 style={{ color: '#D32F2F', marginTop: 0, display: 'flex', alignItems: 'center', gap: 10, marginBottom: 20 }}>
-                <Heart size={28} fill="#D32F2F" /> Piante da Curare
-              </h2>
-
-              {!username ? (
-                <div style={{ textAlign: 'center', marginTop: 40, padding: 20, background: 'var(--white)', borderRadius: 24, border: '1px solid var(--card-border)' }}>
-                  <h3 style={{ marginTop: 0 }}>🔐 Accesso Richiesto</h3>
-                  <p style={{ opacity: 0.7, lineHeight: 1.5 }}>Per salvare e monitorare le piante che necessitano cure, devi essere registrato.</p>
-                  <button onClick={() => setShowAuthModal(true)} style={{ marginTop: 10, background: '#D32F2F', color: 'white', border: 'none', padding: '12px 24px', borderRadius: 100, fontWeight: 800 }}>ACCEDI ORA</button>
-                </div>
-              ) : carePlants.length === 0 ? (
-                <div style={{ textAlign: 'center', marginTop: 40 }}>
-                  <div style={{ opacity: 0.3 }}><Heart size={64} /></div>
-                  <h3 style={{ opacity: 0.5 }}>Nessuna pianta da curare</h3>
-                  <p style={{ opacity: 0.5 }}>Le piante malate che analizzi appariranno qui!</p>
-                  <button onClick={() => setActiveMode('scan')} style={{ marginTop: 20, background: '#FFEBEE', color: '#D32F2F', border: 'none', padding: '12px 24px', borderRadius: 100, fontWeight: 800 }}>VAI ALLA FOTOCAMERA</button>
-                </div>
-              ) : (
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                  {carePlants.map((plant: any) => (
-                    <div key={plant.id} onClick={() => setFullScreenAnalysis({
-                      id: plant.id,
-                      name: plant.plant_name,
-                      scientificName: plant.scientific_name,
-                      image: plant.image_url,
-                      healthStatus: 'sick',
-                      diagnosis: plant.diagnosis || 'Pianta malata - necessita cure',
-                      carePlan: plant.notes,
-                      care: {
-                        watering: plant.watering_guide || 'Controlla il terreno regolarmente',
-                        general: plant.sunlight_guide || 'Posiziona in zona luminosa',
-                        pruning: plant.pruning_guide || 'Rimuovi foglie secche all\'occorrenza',
-                        repotting: plant.repotting_guide || 'Valuta ogni 2 anni'
-                      },
-                      timestamp: new Date(plant.created_at).getTime(),
-                      category: 'Pianta',
-                      source: 'care'
-                    })}
-                      style={{ background: 'var(--white)', borderRadius: 20, overflow: 'hidden', border: '2px solid #D32F2F', boxShadow: '0 4px 10px rgba(211, 47, 47, 0.15)', cursor: 'pointer', position: 'relative' }}>
-
-                      {/* Badge MALATA */}
-                      <div style={{ position: 'absolute', top: 12, left: 12, zIndex: 10, background: '#D32F2F', color: 'white', padding: '6px 10px', borderRadius: 8, fontSize: '0.65rem', fontWeight: 900, boxShadow: '0 4px 8px rgba(211,47,47,0.4)', display: 'flex', alignItems: 'center', gap: 4 }}>
-                        <AlertTriangle size={12} /> MALATA
-                      </div>
-
-                      {/* Pulsante Elimina */}
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          showDeleteConfirmation(
-                            `Rimuovere "${plant.plant_name}" dalla lista cure?`,
-                            () => {
-                              setCarePlants(prev => prev.filter(p => p.id !== plant.id));
-                              setAchievementToast('Pianta rimossa dalla lista cure');
-                              setTimeout(() => setAchievementToast(null), 3000);
-                            }
-                          );
-                        }}
-                        style={{
-                          position: 'absolute',
-                          top: 12,
-                          right: 12,
-                          zIndex: 10,
-                          background: 'rgba(211, 47, 47, 0.9)',
-                          color: 'white',
-                          border: 'none',
-                          width: 32,
-                          height: 32,
-                          borderRadius: '50%',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          cursor: 'pointer',
-                          boxShadow: '0 2px 8px rgba(0,0,0,0.2)'
-                        }}
-                      >
-                        <Trash2 size={16} />
-                      </button>
-
-                      <div style={{ height: 120, background: '#eee', position: 'relative' }}>
-                        <img src={plant.image_url || 'https://placehold.co/400x300?text=Pianta'} style={{ width: '100%', height: '100%', objectFit: 'cover' }} onError={(e) => (e.currentTarget.style.display = 'none')} />
-                        {!plant.image_url && <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: 0.3 }}><Heart size={32} /></div>}
-                      </div>
-
-                      <div style={{ padding: 12 }}>
-                        <div style={{ fontWeight: 800, fontSize: '0.9rem', marginBottom: 4, color: '#D32F2F' }}>{plant.plant_name}</div>
-                        <div style={{ fontSize: '0.7rem', opacity: 0.6, fontStyle: 'italic', marginBottom: 8 }}>{plant.scientific_name}</div>
-                        <div style={{ fontSize: '0.75rem', opacity: 0.8, lineHeight: 1.4, color: '#666' }}>
-                          {plant.diagnosis?.substring(0, 60)}...
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
           ) : (
             <div className="frame-chat-area" ref={scrollRef}>
               {messages.length === 0 && <div style={{ textAlign: 'center', padding: '60px 20px', opacity: 0.3 }}><MessageSquare size={48} style={{ margin: '0 auto 16px' }} /><p>Analizza una pianta o fai una domanda per iniziare.</p></div>}
@@ -3260,22 +3225,11 @@ function App() {
                             diagnosis: m.data.diagnosis
                           });
                           if (res.success) {
-                            // Update local state with real DB ID
-                            if (res.data && res.data.id) {
-                              setMessages(prev => prev.map((msg, idx) => {
-                                if (idx === i && msg.role === 'analysis' && msg.data) {
-                                  return { ...msg, data: { ...msg.data, id: res.data.id } };
-                                }
-                                return msg;
-                              }));
-                            }
-
                             btn.innerHTML = '✅ Salvato!';
                             btn.style.background = '#e8f5e9';
                             btn.style.color = '#2e7d32';
                           } else {
                             btn.innerHTML = '❌ Errore';
-                            if (res.error && res.error.includes('User')) btn.innerHTML = '⚠️ Login?';
                             btn.disabled = false;
                           }
                         } catch (err) {
@@ -3285,29 +3239,6 @@ function App() {
                         }
                       }}>
                         <Plus size={14} style={{ marginRight: 6 }} /> AGGIUNGI AL GIARDINO
-                      </button>
-                    )}
-                    {/* Pulsante AGGIUNGI A CURA per piante malate */}
-                    {username && m.data.healthStatus === 'sick' && (
-                      <button className="quick-reply-chip" style={{ width: '100%', justifyContent: 'center', marginTop: 8, background: '#FFEBEE', color: '#D32F2F', border: '2px solid #D32F2F' }} onClick={() => {
-                        // Aggiungi alla lista cure
-                        const carePlant = {
-                          id: m.data.id || crypto.randomUUID(),
-                          plant_name: m.data.name,
-                          scientific_name: m.data.scientificName,
-                          image_url: m.data.image,
-                          diagnosis: m.data.diagnosis,
-                          watering_guide: m.data.care?.watering,
-                          sunlight_guide: m.data.care?.general,
-                          pruning_guide: m.data.care?.pruning,
-                          repotting_guide: m.data.care?.repotting,
-                          created_at: new Date().toISOString()
-                        };
-                        setCarePlants(prev => [...prev, carePlant]);
-                        setAchievementToast('🏥 Pianta aggiunta alla lista cure!');
-                        setTimeout(() => setAchievementToast(null), 3000);
-                      }}>
-                        <Heart size={14} style={{ marginRight: 6 }} fill="#D32F2F" /> AGGIUNGI A CURA
                       </button>
                     )}
                   </div>
@@ -3349,465 +3280,1084 @@ function App() {
               {isChatLoading && <div className="msg msg-bot" style={{ opacity: 0.5 }}><RefreshCw size={14} className="spin" /> Sto pensando...</div>}
             </div>
           )}
+        </div>
 
-
-          {
-            activeMode === 'chat' && (
-              <>
-                <div className="quick-replies-container">
-                  {quickReplies.map((q, idx) => (
-                    <button key={idx} className="quick-reply-chip" onClick={() => sendMessage(q)}>
-                      <HelpCircle size={14} /> {q}
-                    </button>
-                  ))}
-                </div>
-                <div className="chat-input-row" style={{ marginBottom: 120 }}>
-                  <input className="input-field" placeholder="Chiedi a BioExpert..." value={chatInput} onChange={e => setChatInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && sendMessage()} />
-                  <button className="btn-header-icon" style={{ background: 'var(--primary)', color: 'white', width: 44, height: 44 }} onClick={() => sendMessage()}><Send size={18} /></button>
-                </div>
-              </>
-            )
-          }
-
-
-          {/* PLANT DETAIL PAGE - Full Screen Modal */}
-          {fullScreenAnalysis && (
-            <div style={{
-              position: 'fixed',
-              inset: 0,
-              background: 'white',
-              zIndex: 2000,
-              overflow: 'auto',
-              display: 'flex',
-              flexDirection: 'column'
-            }}>
-              {/* Header Verde */}
-              <div style={{
-                background: 'linear-gradient(135deg, #2E7D32 0%, #1B5E20 100%)',
-                padding: '16px 20px',
-                color: 'white',
-                display: 'flex',
-                alignItems: 'center',
-                gap: 12
-              }}>
-                <button onClick={() => setFullScreenAnalysis(null)} style={{
-                  background: 'rgba(255,255,255,0.2)',
-                  border: 'none',
-                  borderRadius: '50%',
-                  width: 40,
-                  height: 40,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  cursor: 'pointer',
-                  color: 'white'
-                }}>
-                  <ChevronLeft size={24} />
-                </button>
-                <div style={{ flex: 1 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                    <Sprout size={24} />
-                    <h2 style={{ margin: 0, fontSize: '1.3rem', fontWeight: 800 }}>{fullScreenAnalysis.name}</h2>
-                  </div>
-                  <div style={{ fontSize: '0.85rem', opacity: 0.9, fontStyle: 'italic' }}>{fullScreenAnalysis.scientificName}</div>
-                </div>
-                {/* Campanella Notifiche */}
-                <button onClick={() => {
-                  setNotificationsEnabled(!notificationsEnabled);
-                }} style={{
-                  background: notificationsEnabled ? 'rgba(255, 215, 0, 0.3)' : 'rgba(255,255,255,0.2)',
-                  border: 'none',
-                  borderRadius: '50%',
-                  width: 40,
-                  height: 40,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  cursor: 'pointer',
-                  color: notificationsEnabled ? '#FFD700' : 'white'
-                }}>
-                  <Bell size={20} />
-                </button>
-              </div>
-
-              {/* Foto Pianta */}
-              <div style={{ position: 'relative', height: 300, background: '#f5f5f5' }}>
-                <img
-                  src={fullScreenAnalysis.image || 'https://placehold.co/600x400?text=Pianta'}
-                  style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                />
-                <div style={{
-                  position: 'absolute',
-                  top: 16,
-                  right: 16,
-                  background: fullScreenAnalysis.healthStatus === 'sick' ? '#ffebee' : '#e8f5e9',
-                  padding: '8px 16px',
-                  borderRadius: 20,
-                  fontSize: '0.8rem',
-                  fontWeight: 800,
-                  color: fullScreenAnalysis.healthStatus === 'sick' ? '#d32f2f' : '#2e7d32',
-                  boxShadow: '0 4px 12px rgba(0,0,0,0.1)'
-                }}>
-                  {fullScreenAnalysis.healthStatus === 'sick' ? 'MALATA' : 'SANA'}
-                </div>
-              </div>
-
-              {/* Tab Navigation - Rimossa tab CURA */}
-              <div style={{
-                display: 'flex',
-                gap: 8,
-                padding: '16px 20px',
-                borderBottom: '1px solid #e0e0e0'
-              }}>
-                {['INFO'].map((tab) => (
-                  <button
-                    key={tab}
-                    onClick={() => setDetailTab(tab.toLowerCase() as any)}
-                    style={{
-                      flex: 1,
-                      padding: '12px',
-                      background: detailTab === tab.toLowerCase() ? '#2E7D32' : 'transparent',
-                      color: detailTab === tab.toLowerCase() ? 'white' : '#666',
-                      border: detailTab === tab.toLowerCase() ? 'none' : '1px solid #e0e0e0',
-                      borderRadius: 12,
-                      fontWeight: 800,
-                      fontSize: '0.85rem',
-                      cursor: 'pointer',
-                      transition: 'all 0.2s'
-                    }}
-                  >
-                    {tab}
+        {
+          activeMode === 'chat' && (
+            <>
+              <div className="quick-replies-container">
+                {quickReplies.map((q, idx) => (
+                  <button key={idx} className="quick-reply-chip" onClick={() => sendMessage(q)}>
+                    <HelpCircle size={14} /> {q}
                   </button>
                 ))}
               </div>
-
-              {/* Content Area */}
-              <div style={{ flex: 1, padding: '20px', paddingBottom: 20, overflow: 'auto' }}>
-                {detailTab === 'info' && (
-                  <>
-                    {/* Diagnosi */}
-                    <div style={{ marginBottom: 24 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12, color: '#2E7D32' }}>
-                        <ShieldCheck size={20} />
-                        <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 800 }}>Diagnosi</h3>
-                      </div>
-                      <p style={{ margin: 0, color: '#666', lineHeight: 1.6 }}>{fullScreenAnalysis.diagnosis}</p>
-                    </div>
-
-                    {/* Consigli Rapidi */}
-                    <div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16, color: '#d32f2f' }}>
-                        <Heart size={20} />
-                        <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 800 }}>Consigli Rapidi</h3>
-                      </div>
-
-                      {/* Irrigazione */}
-                      <div style={{
-                        background: 'linear-gradient(135deg, #E8F5E9 0%, #C8E6C9 100%)',
-                        borderRadius: 16,
-                        padding: '16px',
-                        marginBottom: 12
-                      }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, color: '#1B5E20' }}>
-                          <Droplets size={18} />
-                          <strong style={{ fontSize: '0.9rem' }}>Irrigazione</strong>
-                        </div>
-                        <p style={{ margin: 0, fontSize: '0.85rem', color: '#2E7D32' }}>{fullScreenAnalysis.care?.watering}</p>
-                      </div>
-
-                      {/* Esposizione */}
-                      <div style={{
-                        background: 'linear-gradient(135deg, #FFF8E1 0%, #FFECB3 100%)',
-                        borderRadius: 16,
-                        padding: '16px',
-                        marginBottom: 12
-                      }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, color: '#E65100' }}>
-                          <Sun size={18} />
-                          <strong style={{ fontSize: '0.9rem' }}>Esposizione</strong>
-                        </div>
-                        <p style={{ margin: 0, fontSize: '0.85rem', color: '#F57C00' }}>{fullScreenAnalysis.care?.general}</p>
-                      </div>
-
-                      {/* Potatura */}
-                      <div style={{
-                        background: 'linear-gradient(135deg, #E8F5E9 0%, #C8E6C9 100%)',
-                        borderRadius: 16,
-                        padding: '16px',
-                        marginBottom: 12
-                      }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, color: '#1B5E20' }}>
-                          <Scissors size={18} />
-                          <strong style={{ fontSize: '0.9rem' }}>Potatura</strong>
-                        </div>
-                        <p style={{ margin: 0, fontSize: '0.85rem', color: '#2E7D32' }}>{fullScreenAnalysis.care?.pruning}</p>
-                      </div>
-
-                      {/* Rinvaso */}
-                      <div style={{
-                        background: 'linear-gradient(135deg, #E8F5E9 0%, #C8E6C9 100%)',
-                        borderRadius: 16,
-                        padding: '16px'
-                      }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, color: '#1B5E20' }}>
-                          <Package size={18} />
-                          <strong style={{ fontSize: '0.9rem' }}>Rinvaso</strong>
-                        </div>
-                        <p style={{ margin: 0, fontSize: '0.85rem', color: '#2E7D32' }}>{fullScreenAnalysis.care?.repotting}</p>
-                      </div>
-
-                      {/* Luxometro */}
-                      {lightLevel !== null && (
-                        <div style={{
-                          background: 'linear-gradient(135deg, #FFF8E1 0%, #FFECB3 100%)',
-                          borderRadius: 16,
-                          padding: '16px',
-                          marginTop: 12
-                        }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, color: '#E65100' }}>
-                            <Sun size={18} />
-                            <strong style={{ fontSize: '0.9rem' }}>Luce Ambiente</strong>
-                          </div>
-                          <p style={{ margin: 0, fontSize: '1.2rem', fontWeight: 800, color: '#F57C00' }}>
-                            {lightLevel.toFixed(0)} lux
-                          </p>
-                          <p style={{ margin: '4px 0 0 0', fontSize: '0.75rem', color: '#666' }}>
-                            {lightLevel < 100 ? '🌑 Molto buio' : lightLevel < 500 ? '🌙 Ombra' : lightLevel < 1000 ? '☁️ Luce indiretta' : lightLevel < 5000 ? '⛅ Luminoso' : '☀️ Pieno sole'}
-                          </p>
-                        </div>
-                      )}
-                    </div>
-                  </>
-                )}
-
-                {/* Rimossa sezione CURA - Piano di cura non più disponibile */}
-
-                {detailTab === 'album' && (
-                  <div style={{ textAlign: 'center', padding: 40, color: '#999' }}>
-                    <ImageIcon size={48} style={{ opacity: 0.3, marginBottom: 16 }} />
-                    <p>Album foto in arrivo...</p>
-                  </div>
-                )}
+              <div className="chat-input-row" style={{ marginBottom: 120 }}>
+                <input className="input-field" placeholder="Chiedi a BioExpert..." value={chatInput} onChange={e => setChatInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && sendMessage()} />
+                <button className="btn-header-icon" style={{ background: 'var(--primary)', color: 'white', width: 44, height: 44 }} onClick={() => sendMessage()}><Send size={18} /></button>
               </div>
+            </>
+          )
+        }
+      </div >
 
-              {/* Pulsante RIMUOVI Fluttuante */}
-              <button
-                onClick={() => {
-                  setConfirmToast({
-                    message: '🗑️ Vuoi davvero rimuovere questa pianta dal giardino?',
-                    onConfirm: async () => {
-                      try {
-                        if (fullScreenAnalysis.id && username) {
-                          await deleteUserPlant(username, fullScreenAnalysis.id);
-                          setAchievementToast('✅ Pianta rimossa dal giardino');
-                          setTimeout(() => setAchievementToast(null), 3000);
-                          setFullScreenAnalysis(null);
-                          // Refresh plant list
-                          const plants = await fetchUserPlants(username);
-                          setUserPlants(plants.data || []);
-                        }
-                      } catch (error) {
-                        setAchievementToast('❌ Errore durante la rimozione');
-                        setTimeout(() => setAchievementToast(null), 3000);
-                      }
-                      setConfirmToast(null);
-                    },
-                    onCancel: () => setConfirmToast(null)
-                  });
-                }}
-                style={{
-                  position: 'fixed',
-                  bottom: 120,
-                  right: 20,
-                  width: 60,
-                  height: 60,
-                  borderRadius: '50%',
-                  background: 'linear-gradient(135deg, #EF5350 0%, #E53935 100%)',
-                  color: 'white',
-                  border: 'none',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  cursor: 'pointer',
-                  boxShadow: '0 6px 20px rgba(244, 67, 54, 0.4)',
-                  zIndex: 2001,
-                  transition: 'all 0.3s'
-                }}
-              >
-                <Trash2 size={24} />
-              </button>
-            </div>
-          )}
-
-          {/* BOTTOM NAVIGATION BAR (Fixed Dock) */}
+      {/* PLANT DETAIL PAGE - Full Screen Modal */}
+      {fullScreenAnalysis && (
+        <div style={{
+          position: 'fixed',
+          inset: 0,
+          background: 'white',
+          zIndex: 2000,
+          overflow: 'auto',
+          display: 'flex',
+          flexDirection: 'column'
+        }}>
+          {/* Header Verde */}
           <div style={{
-            position: 'fixed',
-            bottom: 20,
-            left: 20,
-            right: 20,
-            height: 80,
-            background: 'rgba(255,255,255,0.9)',
-            backdropFilter: 'blur(20px)',
-            borderRadius: 24,
+            background: 'linear-gradient(135deg, #2E7D32 0%, #1B5E20 100%)',
+            padding: '16px 20px',
+            color: 'white',
             display: 'flex',
             alignItems: 'center',
-            justifyContent: 'space-around',
-            boxShadow: '0 10px 30px rgba(0,0,0,0.1)',
-            zIndex: 1000,
-            border: '1px solid rgba(255,255,255,0.5)'
-          }
-          }>
-            {/* HOME Button */}
-            <button
-              onClick={() => { setActiveMode('scan'); setIsCameraOn(false); }}
-              style={{
-                background: 'transparent',
-                border: 'none',
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                gap: 6,
-                padding: 10,
-                cursor: 'pointer',
-                opacity: activeMode === 'scan' ? 1 : 0.5,
-                transform: activeMode === 'scan' ? 'translateY(-2px)' : 'none',
-                transition: 'all 0.2s'
-              }}
-            >
-              <Home size={28} color="#1B5E20" strokeWidth={activeMode === 'scan' ? 2.5 : 2} />
-              <span style={{ fontSize: 10, fontWeight: 800, color: '#1B5E20' }}>HOME</span>
+            gap: 12
+          }}>
+            <button onClick={() => setFullScreenAnalysis(null)} style={{
+              background: 'rgba(255,255,255,0.2)',
+              border: 'none',
+              borderRadius: '50%',
+              width: 40,
+              height: 40,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              cursor: 'pointer',
+              color: 'white'
+            }}>
+              <ChevronLeft size={24} />
             </button>
-
-            {/* GARDEN Button */}
-            <button
-              onClick={() => setActiveMode('garden')}
-              style={{
-                background: 'transparent',
-                border: 'none',
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                gap: 6,
-                padding: 10,
-                cursor: 'pointer',
-                opacity: activeMode === 'garden' ? 1 : 0.5,
-                transform: activeMode === 'garden' ? 'translateY(-2px)' : 'none',
-                transition: 'all 0.2s'
-              }}
-            >
-              <Sprout size={28} color="#1B5E20" strokeWidth={activeMode === 'garden' ? 2.5 : 2} />
-              <span style={{ fontSize: 10, fontWeight: 800, color: '#1B5E20' }}>GIARDINO</span>
-            </button>
-
-            {/* CARE Button */}
-            <button
-              onClick={() => setActiveMode('care')}
-              style={{
-                background: 'transparent',
-                border: 'none',
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                gap: 6,
-                padding: 10,
-                cursor: 'pointer',
-                opacity: activeMode === 'care' ? 1 : 0.5,
-                transform: activeMode === 'care' ? 'translateY(-2px)' : 'none',
-                transition: 'all 0.2s'
-              }}
-            >
-              <Heart size={28} color="#D32F2F" strokeWidth={activeMode === 'care' ? 2.5 : 2} fill={activeMode === 'care' ? '#D32F2F' : 'none'} />
-              <span style={{ fontSize: 10, fontWeight: 800, color: '#D32F2F' }}>CURA</span>
-            </button>
-
-            {/* CHAT Button */}
-            <button
-              onClick={() => setActiveMode('chat')}
-              style={{
-                background: 'transparent',
-                border: 'none',
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                gap: 6,
-                padding: 10,
-                cursor: 'pointer',
-                opacity: activeMode === 'chat' ? 1 : 0.5,
-                transform: activeMode === 'chat' ? 'translateY(-2px)' : 'none',
-                transition: 'all 0.2s'
-              }}
-            >
-              <MessageSquare size={28} color="#1B5E20" strokeWidth={activeMode === 'chat' ? 2.5 : 2} />
-              <span style={{ fontSize: 10, fontWeight: 800, color: '#1B5E20' }}>CHAT</span>
+            <div style={{ flex: 1 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                <Sprout size={24} />
+                <h2 style={{ margin: 0, fontSize: '1.3rem', fontWeight: 800 }}>{fullScreenAnalysis.name}</h2>
+              </div>
+              <div style={{ fontSize: '0.85rem', opacity: 0.9, fontStyle: 'italic' }}>{fullScreenAnalysis.scientificName}</div>
+            </div>
+            {/* Campanella Notifiche */}
+            <button onClick={() => {
+              setNotificationsEnabled(!notificationsEnabled);
+            }} style={{
+              background: notificationsEnabled ? 'rgba(255, 215, 0, 0.3)' : 'rgba(255,255,255,0.2)',
+              border: 'none',
+              borderRadius: '50%',
+              width: 40,
+              height: 40,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              cursor: 'pointer',
+              color: notificationsEnabled ? '#FFD700' : 'white'
+            }}>
+              <Bell size={20} />
             </button>
           </div>
 
-          <input type="file" ref={fileInputRef} hidden accept="image/*" onChange={handleFileUpload} />
+          {/* Foto Pianta */}
+          <div style={{ position: 'relative', height: 300, background: '#f5f5f5' }}>
+            <img
+              src={fullScreenAnalysis.image || 'https://placehold.co/600x400?text=Pianta'}
+              style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+            />
+            <div style={{
+              position: 'absolute',
+              top: 16,
+              right: 16,
+              background: fullScreenAnalysis.healthStatus === 'sick' ? '#ffebee' : '#e8f5e9',
+              padding: '8px 16px',
+              borderRadius: 20,
+              fontSize: '0.8rem',
+              fontWeight: 800,
+              color: fullScreenAnalysis.healthStatus === 'sick' ? '#d32f2f' : '#2e7d32',
+              boxShadow: '0 4px 12px rgba(0,0,0,0.1)'
+            }}>
+              {fullScreenAnalysis.healthStatus === 'sick' ? 'MALATA' : 'SANA'}
+            </div>
+          </div>
 
-          {
-            isHistoryOpen && (
-              <div className="side-overlay">
-                {/* Banner Header Integrato - Erbario (Uniformato) */}
-                <div style={{
-                  background: 'linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%)',
-                  padding: '24px 20px 28px',
-                  position: 'relative',
-                  boxShadow: '0 4px 20px rgba(0,0,0,0.15)',
-                  overflow: 'hidden',
-                  borderBottomLeftRadius: 32,
-                  borderBottomRightRadius: 32,
-                  flexShrink: 0
-                }}>
-                  <Sprout size={140} style={{ position: 'absolute', right: -20, top: -20, opacity: 0.1, color: 'white', transform: 'rotate(15deg)' }} />
+          {/* Tab Navigation */}
+          <div style={{
+            display: 'flex',
+            gap: 8,
+            padding: '16px 20px',
+            borderBottom: '1px solid #e0e0e0'
+          }}>
+            {['INFO', 'CURA'].map((tab) => (
+              <button
+                key={tab}
+                onClick={() => setDetailTab(tab.toLowerCase() as any)}
+                style={{
+                  flex: 1,
+                  padding: '12px',
+                  background: detailTab === tab.toLowerCase() ? '#2E7D32' : 'transparent',
+                  color: detailTab === tab.toLowerCase() ? 'white' : '#666',
+                  border: detailTab === tab.toLowerCase() ? 'none' : '1px solid #e0e0e0',
+                  borderRadius: 12,
+                  fontWeight: 800,
+                  fontSize: '0.85rem',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s'
+                }}
+              >
+                {tab}
+              </button>
+            ))}
+          </div>
 
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 16, position: 'relative', zIndex: 1 }}>
-                    <button
-                      className="btn-header-icon"
-                      onClick={() => setIsHistoryOpen(false)}
-                      style={{
-                        background: 'rgba(255,255,255,0.2)',
-                        color: 'white',
-                        border: 'none',
-                        width: 40,
-                        height: 40,
-                        borderRadius: 12,
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        cursor: 'pointer'
-                      }}>
-                      <ChevronLeft size={24} />
-                    </button>
+          {/* Content Area */}
+          <div style={{ flex: 1, padding: '20px', paddingBottom: 20, overflow: 'auto' }}>
+            {detailTab === 'info' && (
+              <>
+                {/* Diagnosi */}
+                <div style={{ marginBottom: 24 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12, color: '#2E7D32' }}>
+                    <ShieldCheck size={20} />
+                    <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 800 }}>Diagnosi</h3>
+                  </div>
+                  <p style={{ margin: 0, color: '#666', lineHeight: 1.6 }}>{fullScreenAnalysis.diagnosis}</p>
+                </div>
 
-                    <div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                        <BookOpen size={24} color="white" fill="white" fillOpacity={0.3} />
-                        <h2 style={{ margin: 0, color: 'white', fontSize: '1.5rem', fontWeight: 800, textShadow: '0 2px 4px rgba(0,0,0,0.1)' }}>Il Tuo Erbario</h2>
+                {/* Consigli Rapidi Ampliati */}
+                <div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16, color: '#2E7D32' }}>
+                    <Leaf size={20} />
+                    <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 800 }}>Guida alla Cura</h3>
+                  </div>
+
+                  {/* Irrigazione Dettagliata */}
+                  <div style={{
+                    background: 'linear-gradient(135deg, #E3F2FD 0%, #BBDEFB 100%)',
+                    borderRadius: 20,
+                    padding: '20px',
+                    marginBottom: 16,
+                    border: '1px solid rgba(33, 150, 243, 0.2)'
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+                      <div style={{ background: '#2196F3', padding: 10, borderRadius: 12, color: 'white' }}>
+                        <Droplets size={22} />
                       </div>
-                      <div style={{ color: 'rgba(255,255,255,0.85)', fontSize: '0.85rem', marginTop: 4, fontWeight: 500 }}>Cronologia delle tue scoperte botaniche</div>
+                      <div>
+                        <strong style={{ fontSize: '1rem', color: '#1565C0', display: 'block' }}>Irrigazione</strong>
+                        <span style={{ fontSize: '0.75rem', color: '#1976D2', opacity: 0.8 }}>Come e quando annaffiare</span>
+                      </div>
+                    </div>
+                    <p style={{ margin: 0, fontSize: '0.9rem', color: '#1565C0', lineHeight: 1.7 }}>{fullScreenAnalysis.care?.watering}</p>
+                    <div style={{ marginTop: 12, padding: '10px 14px', background: 'rgba(255,255,255,0.6)', borderRadius: 12, fontSize: '0.8rem', color: '#0D47A1' }}>
+                      💡 <strong>Per questa pianta:</strong> {fullScreenAnalysis.careTips?.wateringTip || "Controlla sempre il terreno prima di annaffiare."}
+                    </div>
+                  </div>
+
+                  {/* Esposizione Dettagliata */}
+                  <div style={{
+                    background: 'linear-gradient(135deg, #FFF8E1 0%, #FFECB3 100%)',
+                    borderRadius: 20,
+                    padding: '20px',
+                    marginBottom: 16,
+                    border: '1px solid rgba(255, 193, 7, 0.3)'
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+                      <div style={{ background: '#FF9800', padding: 10, borderRadius: 12, color: 'white' }}>
+                        <Sun size={22} />
+                      </div>
+                      <div>
+                        <strong style={{ fontSize: '1rem', color: '#E65100', display: 'block' }}>Esposizione e Ambiente</strong>
+                        <span style={{ fontSize: '0.75rem', color: '#F57C00', opacity: 0.8 }}>Luce, temperatura e umidità</span>
+                      </div>
+                    </div>
+                    <p style={{ margin: 0, fontSize: '0.9rem', color: '#E65100', lineHeight: 1.7 }}>{fullScreenAnalysis.care?.general}</p>
+                    <div style={{ marginTop: 12, padding: '10px 14px', background: 'rgba(255,255,255,0.6)', borderRadius: 12, fontSize: '0.8rem', color: '#BF360C' }}>
+                      💡 <strong>Per questa pianta:</strong> {fullScreenAnalysis.careTips?.lightTip || "Ruota il vaso per crescita uniforme."}
+                    </div>
+                  </div>
+
+                  {/* Potatura Dettagliata */}
+                  <div style={{
+                    background: 'linear-gradient(135deg, #E8F5E9 0%, #C8E6C9 100%)',
+                    borderRadius: 20,
+                    padding: '20px',
+                    marginBottom: 16,
+                    border: '1px solid rgba(76, 175, 80, 0.3)'
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+                      <div style={{ background: '#4CAF50', padding: 10, borderRadius: 12, color: 'white' }}>
+                        <Scissors size={22} />
+                      </div>
+                      <div>
+                        <strong style={{ fontSize: '1rem', color: '#2E7D32', display: 'block' }}>Potatura</strong>
+                        <span style={{ fontSize: '0.75rem', color: '#388E3C', opacity: 0.8 }}>Quando e come potare</span>
+                      </div>
+                    </div>
+                    <p style={{ margin: 0, fontSize: '0.9rem', color: '#2E7D32', lineHeight: 1.7 }}>{fullScreenAnalysis.care?.pruning}</p>
+                    <div style={{ marginTop: 12, padding: '10px 14px', background: 'rgba(255,255,255,0.6)', borderRadius: 12, fontSize: '0.8rem', color: '#1B5E20' }}>
+                      💡 <strong>Per questa pianta:</strong> {fullScreenAnalysis.careTips?.pruningTip || "Rimuovi le foglie secche o danneggiate."}
+                    </div>
+                  </div>
+
+                  {/* Rinvaso Dettagliato */}
+                  <div style={{
+                    background: 'linear-gradient(135deg, #EFEBE9 0%, #D7CCC8 100%)',
+                    borderRadius: 20,
+                    padding: '20px',
+                    marginBottom: 16,
+                    border: '1px solid rgba(121, 85, 72, 0.3)'
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+                      <div style={{ background: '#795548', padding: 10, borderRadius: 12, color: 'white' }}>
+                        <Package size={22} />
+                      </div>
+                      <div>
+                        <strong style={{ fontSize: '1rem', color: '#5D4037', display: 'block' }}>Rinvaso e Terreno</strong>
+                        <span style={{ fontSize: '0.75rem', color: '#6D4C41', opacity: 0.8 }}>Quando rinvasare e quale terriccio</span>
+                      </div>
+                    </div>
+                    <p style={{ margin: 0, fontSize: '0.9rem', color: '#5D4037', lineHeight: 1.7 }}>{fullScreenAnalysis.care?.repotting}</p>
+                    <div style={{ marginTop: 12, padding: '10px 14px', background: 'rgba(255,255,255,0.6)', borderRadius: 12, fontSize: '0.8rem', color: '#3E2723' }}>
+                      💡 <strong>Per questa pianta:</strong> {fullScreenAnalysis.careTips?.generalTip || "Osserva regolarmente la tua pianta per capire le sue esigenze."}
+                    </div>
+                  </div>
+
+                  {/* Luxometro */}
+                  {lightLevel !== null && (
+                    <div style={{
+                      background: 'linear-gradient(135deg, #FFF8E1 0%, #FFECB3 100%)',
+                      borderRadius: 20,
+                      padding: '20px',
+                      border: '1px solid rgba(255, 193, 7, 0.3)'
+                    }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+                        <div style={{ background: '#FFC107', padding: 10, borderRadius: 12, color: 'white' }}>
+                          <Sun size={22} />
+                        </div>
+                        <div>
+                          <strong style={{ fontSize: '1rem', color: '#E65100', display: 'block' }}>Luce Ambiente Attuale</strong>
+                          <span style={{ fontSize: '0.75rem', color: '#F57C00', opacity: 0.8 }}>Misurata dal sensore</span>
+                        </div>
+                      </div>
+                      <p style={{ margin: 0, fontSize: '1.8rem', fontWeight: 800, color: '#E65100' }}>
+                        {lightLevel.toFixed(0)} lux
+                      </p>
+                      <p style={{ margin: '8px 0 0 0', fontSize: '0.85rem', color: '#BF360C' }}>
+                        {lightLevel < 100 ? '🌑 Molto buio - la maggior parte delle piante soffre' : lightLevel < 500 ? '🌙 Ombra - adatto a piante da interni ombra' : lightLevel < 1000 ? '☁️ Luce indiretta - ideale per molte piante da appartamento' : lightLevel < 5000 ? '⛅ Luminoso - perfetto per piante che amano la luce' : '☀️ Pieno sole - attenzione a scottature fogliari'}
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </>
+            )}
+
+            {detailTab === 'cura' && (
+              <div style={{ padding: 10 }}>
+                {/* Sezione Cura Dettagliata - Sostituisce Piano Cura */}
+                <div className="animate-fade-in">
+                  {/* Header Sezione */}
+                  <div style={{
+                    background: 'linear-gradient(135deg, #2E7D32 0%, #1B5E20 100%)',
+                    borderRadius: 24,
+                    padding: '24px 20px',
+                    marginBottom: 20,
+                    color: 'white',
+                    position: 'relative',
+                    overflow: 'hidden'
+                  }}>
+                    <Leaf size={100} style={{ position: 'absolute', right: -20, top: -20, opacity: 0.1 }} />
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 12, position: 'relative', zIndex: 1 }}>
+                      <div style={{ background: 'rgba(255,255,255,0.2)', padding: 12, borderRadius: 16 }}>
+                        <Heart size={28} />
+                      </div>
+                      <div>
+                        <h3 style={{ margin: 0, fontSize: '1.3rem', fontWeight: 800 }}>Guida Completa alla Cura</h3>
+                        <p style={{ margin: '4px 0 0 0', fontSize: '0.85rem', opacity: 0.9 }}>Tutto ciò che devi sapere per far prosperare la tua {fullScreenAnalysis.name}</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Irrigazione Approfondita */}
+                  <div style={{
+                    background: 'linear-gradient(145deg, #E3F2FD 0%, #BBDEFB 100%)',
+                    borderRadius: 24,
+                    padding: '24px',
+                    marginBottom: 16,
+                    border: '2px solid rgba(33, 150, 243, 0.15)',
+                    boxShadow: '0 8px 24px rgba(33, 150, 243, 0.1)'
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 16 }}>
+                      <div style={{ background: 'linear-gradient(135deg, #2196F3 0%, #1976D2 100%)', padding: 14, borderRadius: 16, color: 'white', boxShadow: '0 4px 12px rgba(33, 150, 243, 0.3)' }}>
+                        <Droplets size={26} />
+                      </div>
+                      <div>
+                        <h4 style={{ margin: 0, fontSize: '1.15rem', fontWeight: 800, color: '#1565C0' }}>💧 Irrigazione</h4>
+                        <span style={{ fontSize: '0.8rem', color: '#1976D2', fontWeight: 500 }}>Frequenza, quantità e metodo</span>
+                      </div>
+                    </div>
+                    <p style={{ margin: '0 0 16px 0', fontSize: '0.95rem', color: '#0D47A1', lineHeight: 1.8, fontWeight: 500 }}>
+                      {fullScreenAnalysis.care?.watering}
+                    </p>
+                    <div style={{ background: 'rgba(255,255,255,0.7)', borderRadius: 16, padding: '14px 18px', borderLeft: '4px solid #2196F3' }}>
+                      <strong style={{ color: '#1565C0', fontSize: '0.85rem' }}>💡 Consiglio per la TUA pianta:</strong>
+                      <p style={{ margin: '8px 0 0 0', color: '#0D47A1', fontSize: '0.9rem', lineHeight: 1.7 }}>
+                        {fullScreenAnalysis.careTips?.wateringTip || "Controlla sempre che il terreno sia asciutto nei primi 2-3 cm prima di annaffiare."}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Esposizione e Luce Approfondita */}
+                  <div style={{
+                    background: 'linear-gradient(145deg, #FFF8E1 0%, #FFECB3 100%)',
+                    borderRadius: 24,
+                    padding: '24px',
+                    marginBottom: 16,
+                    border: '2px solid rgba(255, 152, 0, 0.15)',
+                    boxShadow: '0 8px 24px rgba(255, 152, 0, 0.1)'
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 16 }}>
+                      <div style={{ background: 'linear-gradient(135deg, #FF9800 0%, #F57C00 100%)', padding: 14, borderRadius: 16, color: 'white', boxShadow: '0 4px 12px rgba(255, 152, 0, 0.3)' }}>
+                        <Sun size={26} />
+                      </div>
+                      <div>
+                        <h4 style={{ margin: 0, fontSize: '1.15rem', fontWeight: 800, color: '#E65100' }}>☀️ Esposizione e Ambiente</h4>
+                        <span style={{ fontSize: '0.8rem', color: '#EF6C00', fontWeight: 500 }}>Luce, temperatura e umidità ideali</span>
+                      </div>
+                    </div>
+                    <p style={{ margin: '0 0 16px 0', fontSize: '0.95rem', color: '#BF360C', lineHeight: 1.8, fontWeight: 500 }}>
+                      {fullScreenAnalysis.care?.general}
+                    </p>
+                    <div style={{ background: 'rgba(255,255,255,0.7)', borderRadius: 16, padding: '14px 18px', borderLeft: '4px solid #FF9800' }}>
+                      <strong style={{ color: '#E65100', fontSize: '0.85rem' }}>💡 Consiglio per la TUA pianta:</strong>
+                      <p style={{ margin: '8px 0 0 0', color: '#BF360C', fontSize: '0.9rem', lineHeight: 1.7 }}>
+                        {fullScreenAnalysis.careTips?.lightTip || "Ruota periodicamente il vaso per garantire una crescita uniforme."}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Potatura Approfondita */}
+                  <div style={{
+                    background: 'linear-gradient(145deg, #E8F5E9 0%, #C8E6C9 100%)',
+                    borderRadius: 24,
+                    padding: '24px',
+                    marginBottom: 16,
+                    border: '2px solid rgba(76, 175, 80, 0.15)',
+                    boxShadow: '0 8px 24px rgba(76, 175, 80, 0.1)'
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 16 }}>
+                      <div style={{ background: 'linear-gradient(135deg, #4CAF50 0%, #388E3C 100%)', padding: 14, borderRadius: 16, color: 'white', boxShadow: '0 4px 12px rgba(76, 175, 80, 0.3)' }}>
+                        <Scissors size={26} />
+                      </div>
+                      <div>
+                        <h4 style={{ margin: 0, fontSize: '1.15rem', fontWeight: 800, color: '#2E7D32' }}>✂️ Potatura e Manutenzione</h4>
+                        <span style={{ fontSize: '0.8rem', color: '#388E3C', fontWeight: 500 }}>Quando e come potare correttamente</span>
+                      </div>
+                    </div>
+                    <p style={{ margin: '0 0 16px 0', fontSize: '0.95rem', color: '#1B5E20', lineHeight: 1.8, fontWeight: 500 }}>
+                      {fullScreenAnalysis.care?.pruning}
+                    </p>
+                    <div style={{ background: 'rgba(255,255,255,0.7)', borderRadius: 16, padding: '14px 18px', borderLeft: '4px solid #4CAF50' }}>
+                      <strong style={{ color: '#2E7D32', fontSize: '0.85rem' }}>💡 Consiglio per la TUA pianta:</strong>
+                      <p style={{ margin: '8px 0 0 0', color: '#1B5E20', fontSize: '0.9rem', lineHeight: 1.7 }}>
+                        {fullScreenAnalysis.careTips?.pruningTip || "Rimuovi regolarmente le foglie secche o danneggiate per favorire la crescita."}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Rinvaso Approfondito */}
+                  <div style={{
+                    background: 'linear-gradient(145deg, #EFEBE9 0%, #D7CCC8 100%)',
+                    borderRadius: 24,
+                    padding: '24px',
+                    marginBottom: 16,
+                    border: '2px solid rgba(121, 85, 72, 0.15)',
+                    boxShadow: '0 8px 24px rgba(121, 85, 72, 0.1)'
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 16 }}>
+                      <div style={{ background: 'linear-gradient(135deg, #795548 0%, #5D4037 100%)', padding: 14, borderRadius: 16, color: 'white', boxShadow: '0 4px 12px rgba(121, 85, 72, 0.3)' }}>
+                        <Package size={26} />
+                      </div>
+                      <div>
+                        <h4 style={{ margin: 0, fontSize: '1.15rem', fontWeight: 800, color: '#5D4037' }}>🪴 Rinvaso e Terriccio</h4>
+                        <span style={{ fontSize: '0.8rem', color: '#6D4C41', fontWeight: 500 }}>Vaso, substrato e tempistiche</span>
+                      </div>
+                    </div>
+                    <p style={{ margin: '0 0 16px 0', fontSize: '0.95rem', color: '#4E342E', lineHeight: 1.8, fontWeight: 500 }}>
+                      {fullScreenAnalysis.care?.repotting}
+                    </p>
+                    <div style={{ background: 'rgba(255,255,255,0.7)', borderRadius: 16, padding: '14px 18px', borderLeft: '4px solid #795548' }}>
+                      <strong style={{ color: '#5D4037', fontSize: '0.85rem' }}>💡 Consiglio per la TUA pianta:</strong>
+                      <p style={{ margin: '8px 0 0 0', color: '#4E342E', fontSize: '0.9rem', lineHeight: 1.7 }}>
+                        {fullScreenAnalysis.careTips?.generalTip || "Osserva regolarmente la tua pianta per capire le sue esigenze e adattare le cure."}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Nota Finale */}
+                  <div style={{
+                    background: 'linear-gradient(135deg, #F3E5F5 0%, #E1BEE7 100%)',
+                    borderRadius: 20,
+                    padding: '18px 20px',
+                    display: 'flex',
+                    alignItems: 'flex-start',
+                    gap: 14,
+                    border: '1px solid rgba(156, 39, 176, 0.2)'
+                  }}>
+                    <div style={{ background: '#9C27B0', padding: 10, borderRadius: 12, color: 'white', flexShrink: 0 }}>
+                      <Sparkles size={20} />
+                    </div>
+                    <div>
+                      <strong style={{ color: '#7B1FA2', fontSize: '0.9rem' }}>Ricorda!</strong>
+                      <p style={{ margin: '6px 0 0 0', fontSize: '0.85rem', color: '#6A1B9A', lineHeight: 1.6 }}>
+                        Ogni pianta è unica. Osserva regolarmente la tua {fullScreenAnalysis.name} per capire le sue reali esigenze e adattare le cure di conseguenza.
+                      </p>
                     </div>
                   </div>
                 </div>
-                <div className="overlay-content">
+              </div>
+            )}
+
+            {detailTab === 'album' && (
+              <div style={{ textAlign: 'center', padding: 40, color: '#999' }}>
+                <ImageIcon size={48} style={{ opacity: 0.3, marginBottom: 16 }} />
+                <p>Album foto in arrivo...</p>
+              </div>
+            )}
+          </div>
+
+          {/* Pulsante RIMUOVI Fluttuante */}
+          <button
+            onClick={() => {
+              setConfirmToast({
+                message: '🗑️ Vuoi davvero rimuovere questa pianta dal giardino?',
+                onConfirm: async () => {
+                  try {
+                    if (fullScreenAnalysis.id && username) {
+                      await deleteUserPlant(username, fullScreenAnalysis.id);
+                      setAchievementToast('✅ Pianta rimossa dal giardino');
+                      setTimeout(() => setAchievementToast(null), 3000);
+                      setFullScreenAnalysis(null);
+                      // Refresh plant list
+                      const plants = await fetchUserPlants(username);
+                      setUserPlants(plants.data || []);
+                    }
+                  } catch (error) {
+                    setAchievementToast('❌ Errore durante la rimozione');
+                    setTimeout(() => setAchievementToast(null), 3000);
+                  }
+                  setConfirmToast(null);
+                },
+                onCancel: () => setConfirmToast(null)
+              });
+            }}
+            style={{
+              position: 'fixed',
+              bottom: 120,
+              right: 20,
+              width: 60,
+              height: 60,
+              borderRadius: '50%',
+              background: 'linear-gradient(135deg, #EF5350 0%, #E53935 100%)',
+              color: 'white',
+              border: 'none',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              cursor: 'pointer',
+              boxShadow: '0 6px 20px rgba(244, 67, 54, 0.4)',
+              zIndex: 2001,
+              transition: 'all 0.3s'
+            }}
+          >
+            <Trash2 size={24} />
+          </button>
+        </div>
+      )}
+
+      {/* BOTTOM NAVIGATION BAR (Fixed Dock) */}
+      < div style={{
+        position: 'fixed',
+        bottom: 20,
+        left: 20,
+        right: 20,
+        height: 80,
+        background: 'rgba(255,255,255,0.9)',
+        backdropFilter: 'blur(20px)',
+        borderRadius: 24,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-around',
+        boxShadow: '0 10px 30px rgba(0,0,0,0.1)',
+        zIndex: 1000,
+        border: '1px solid rgba(255,255,255,0.5)'
+      }
+      }>
+        {/* HOME Button */}
+        < button
+          onClick={() => { setActiveMode('scan'); setIsCameraOn(false); }}
+          style={{
+            background: 'transparent',
+            border: 'none',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            gap: 6,
+            padding: 10,
+            cursor: 'pointer',
+            opacity: activeMode === 'scan' ? 1 : 0.5,
+            transform: activeMode === 'scan' ? 'translateY(-2px)' : 'none',
+            transition: 'all 0.2s'
+          }}
+        >
+          <Home size={28} color="#1B5E20" strokeWidth={activeMode === 'scan' ? 2.5 : 2} />
+          <span style={{ fontSize: 10, fontWeight: 800, color: '#1B5E20' }}>HOME</span>
+        </button >
+
+        {/* GARDEN Button */}
+        < button
+          onClick={() => setActiveMode('garden')}
+          style={{
+            background: 'transparent',
+            border: 'none',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            gap: 6,
+            padding: 10,
+            cursor: 'pointer',
+            opacity: activeMode === 'garden' ? 1 : 0.5,
+            transform: activeMode === 'garden' ? 'translateY(-2px)' : 'none',
+            transition: 'all 0.2s'
+          }}
+        >
+          <Sprout size={28} color="#1B5E20" strokeWidth={activeMode === 'garden' ? 2.5 : 2} />
+          <span style={{ fontSize: 10, fontWeight: 800, color: '#1B5E20' }}>GIARDINO</span>
+        </button >
+
+        {/* CHAT Button */}
+        < button
+          onClick={() => setActiveMode('chat')}
+          style={{
+            background: 'transparent',
+            border: 'none',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            gap: 6,
+            padding: 10,
+            cursor: 'pointer',
+            opacity: activeMode === 'chat' ? 1 : 0.5,
+            transform: activeMode === 'chat' ? 'translateY(-2px)' : 'none',
+            transition: 'all 0.2s'
+          }}
+        >
+          <MessageSquare size={28} color="#1B5E20" strokeWidth={activeMode === 'chat' ? 2.5 : 2} />
+          <span style={{ fontSize: 10, fontWeight: 800, color: '#1B5E20' }}>CHAT</span>
+        </button >
+      </div >
+
+      <input type="file" ref={fileInputRef} hidden accept="image/*" onChange={handleFileUpload} />
+
+      {
+        isHistoryOpen && (
+          <div className="side-overlay">
+            {/* Banner Header Integrato - Erbario (Uniformato) */}
+            <div style={{
+              background: 'linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%)',
+              padding: '24px 20px 28px',
+              position: 'relative',
+              boxShadow: '0 4px 20px rgba(0,0,0,0.15)',
+              overflow: 'hidden',
+              borderBottomLeftRadius: 32,
+              borderBottomRightRadius: 32,
+              flexShrink: 0
+            }}>
+              <Sprout size={140} style={{ position: 'absolute', right: -20, top: -20, opacity: 0.1, color: 'white', transform: 'rotate(15deg)' }} />
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: 16, position: 'relative', zIndex: 1 }}>
+                <button
+                  className="btn-header-icon"
+                  onClick={() => setIsHistoryOpen(false)}
+                  style={{
+                    background: 'rgba(255,255,255,0.2)',
+                    color: 'white',
+                    border: 'none',
+                    width: 40,
+                    height: 40,
+                    borderRadius: 12,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    cursor: 'pointer'
+                  }}>
+                  <ChevronLeft size={24} />
+                </button>
+
+                <div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <BookOpen size={24} color="white" fill="white" fillOpacity={0.3} />
+                    <h2 style={{ margin: 0, color: 'white', fontSize: '1.5rem', fontWeight: 800, textShadow: '0 2px 4px rgba(0,0,0,0.1)' }}>Il Tuo Erbario</h2>
+                  </div>
+                  <div style={{ color: 'rgba(255,255,255,0.85)', fontSize: '0.85rem', marginTop: 4, fontWeight: 500 }}>Cronologia delle tue scoperte botaniche</div>
+                </div>
+              </div>
+            </div>
+            <div className="overlay-content">
+              {!username && (
+                <div style={{
+                  background: 'linear-gradient(135deg, #667eea, #764ba2)',
+                  padding: '16px',
+                  borderRadius: '12px',
+                  marginBottom: '16px',
+                  color: 'white',
+                }}>
+                  <h3 style={{ margin: '0 0 8px 0', fontSize: '16px', fontWeight: '600' }}>
+                    📸 Cronologia Locale
+                  </h3>
+                  <p style={{ margin: '0 0 12px 0', fontSize: '14px', opacity: 0.9 }}>
+                    Le tue foto sono salvate solo su questo dispositivo. Registrati per sincronizzare su tutti i tuoi dispositivi!
+                  </p>
+                  <button
+                    onClick={() => setShowAuthModal(true)}
+                    style={{
+                      background: 'white',
+                      color: '#667eea',
+                      border: 'none',
+                      padding: '10px 20px',
+                      borderRadius: '8px',
+                      fontWeight: '600',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    REGISTRATI ORA
+                  </button>
+                </div>
+              )}
+              {history.length === 0 ? <p style={{ opacity: 0.5, textAlign: 'center', marginTop: 40 }}>Ancora nessuna pianta salvata.</p> : history.map(h => (
+                <div key={h.id} style={{ padding: 14, background: 'var(--white)', borderRadius: 24, marginBottom: 12, display: 'flex', alignItems: 'center', gap: 14, border: '1px solid var(--card-border)', boxShadow: '0 4px 10px rgba(0,0,0,0.02)' }}>
+                  <img src={h.image} style={{ width: 54, height: 54, borderRadius: 14, objectFit: 'cover' }} onClick={() => setFullScreenAnalysis({ ...h, source: 'history' })} />
+                  <div style={{ flex: 1 }} onClick={() => setFullScreenAnalysis({ ...h, source: 'history' })}><div style={{ fontWeight: 800 }}>{h.name}</div><div style={{ fontSize: '0.7rem', opacity: 0.5 }}>{new Date(h.timestamp).toLocaleDateString()}</div></div>
+                  <button onClick={(e) => {
+                    e.stopPropagation();
+                    showDeleteConfirmation('Eliminare questa scansione dalla cronologia?', () => {
+                      const newHistory = history.filter(item => item.id !== h.id);
+                      setHistory(newHistory);
+                    });
+                  }} style={{ background: 'transparent', border: 'none', color: 'var(--danger)', padding: 8, cursor: 'pointer' }}>
+                    <Trash2 size={18} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )
+      }
+
+      {
+        isGamesOpen && (
+          <div className="side-overlay">
+            {/* Banner Header Integrato - Sfide */}
+            <div style={{
+              background: 'linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%)',
+              padding: '24px 20px 28px',
+              position: 'relative',
+              boxShadow: '0 4px 20px rgba(0,0,0,0.15)',
+              overflow: 'hidden',
+              borderBottomLeftRadius: 32,
+              borderBottomRightRadius: 32,
+              flexShrink: 0
+            }}>
+              <Sprout size={140} style={{ position: 'absolute', right: -20, top: -20, opacity: 0.1, color: 'white', transform: 'rotate(15deg)' }} />
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: 16, position: 'relative', zIndex: 1 }}>
+                <button
+                  className="btn-header-icon"
+                  onClick={() => { setIsGamesOpen(false); setActiveGame(null); setShowQuestIntro(false); }}
+                  style={{
+                    background: 'rgba(255,255,255,0.2)',
+                    color: 'white',
+                    border: 'none',
+                    width: 40,
+                    height: 40,
+                    borderRadius: 12,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    cursor: 'pointer'
+                  }}>
+                  <ChevronLeft size={24} />
+                </button>
+
+                <div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <Gamepad2 size={24} color="white" fill="white" fillOpacity={0.3} />
+                    <h2 style={{ margin: 0, color: 'white', fontSize: '1.5rem', fontWeight: 800, textShadow: '0 2px 4px rgba(0,0,0,0.1)' }}>Sfide Botaniche</h2>
+                  </div>
+                  <div style={{ color: 'rgba(255,255,255,0.85)', fontSize: '0.85rem', marginTop: 4, fontWeight: 500 }}>Completa missioni e guadagna XP</div>
+                </div>
+              </div>
+            </div>
+            <div className="overlay-content">
+              {showQuestIntro ? (
+                <div style={{ padding: '20px' }}>
+                  <div style={{ background: 'linear-gradient(135deg, var(--primary), var(--primary-dark))', borderRadius: 24, padding: 32, color: 'white', marginBottom: 24, textAlign: 'center' }}>
+                    <div style={{ fontSize: '3rem', marginBottom: 12 }}>{QUESTS.find(q => q.id === activeGame)?.icon}</div>
+                    <h2 style={{ margin: '0 0 8px', fontSize: '1.5rem' }}>{QUESTS.find(q => q.id === activeGame)?.title}</h2>
+                    <div style={{ opacity: 0.9, fontSize: '0.9rem' }}>{QUESTS.find(q => q.id === activeGame)?.desc}</div>
+                  </div>
+                  <div style={{ background: 'var(--white)', borderRadius: 24, padding: 24, border: '1px solid var(--card-border)', marginBottom: 20 }}>
+                    <h3 style={{ marginTop: 0, color: 'var(--primary)' }}>Come Funziona:</h3>
+                    {QUESTS.find(q => q.id === activeGame)?.type === 'quiz' ? (
+                      <ul style={{ lineHeight: 1.8, paddingLeft: 20 }}>
+                        <li>Rispondi a <b>8 domande</b> sulla botanica</li>
+                        <li>Ottieni <b>10 XP</b> per ogni risposta corretta</li>
+                        <li>Completa la sfida rispondendo correttamente ad almeno <b>5/8 domande</b></li>
+                        <li>Ricevi <b>+{QUESTS.find(q => q.id === activeGame)?.xp} XP bonus</b> al completamento!</li>
+                      </ul>
+                    ) : QUESTS.find(q => q.id === activeGame)?.type === 'beauty' ? (
+                      <ul style={{ lineHeight: 1.8, paddingLeft: 20 }}>
+                        <li>Fotografa il <b>fiore o pianta più bello</b> che riesci a trovare</li>
+                        <li>L'AI valuterà la bellezza da <b>1 a 100</b> considerando colori, simmetria e composizione</li>
+                        <li>Ottieni <b>XP pari al punteggio</b> ricevuto</li>
+                        <li>Competi nella <b>classifica globale</b> con gli altri utenti!</li>
+                        <li>Il punteggio più alto vince <b>+{QUESTS.find(q => q.id === activeGame)?.xp} XP bonus</b></li>
+                      </ul>
+                    ) : (
+                      <ul style={{ lineHeight: 1.8, paddingLeft: 20 }}>
+                        <li>Trova e fotografa <b>{QUESTS.find(q => q.id === activeGame)?.requirement}</b></li>
+                        <li>L'AI genererà <b>3 domande specifiche</b> sulla tua foto</li>
+                        <li>Rispondi correttamente ad almeno <b>2/3 domande</b></li>
+                        <li>Ottieni <b>10 XP</b> per risposta corretta + <b>+{QUESTS.find(q => q.id === activeGame)?.xp} XP bonus</b>!</li>
+                        {QUESTS.find(q => q.id === activeGame)?.count && <li>Ripeti per <b>{QUESTS.find(q => q.id === activeGame)?.count} volte</b> per completare la sfida</li>}
+                      </ul>
+                    )}
+                  </div>
+                  <button onClick={startQuestAfterIntro} style={{ width: '100%', background: 'var(--primary)', color: 'white', border: 'none', padding: '18px', borderRadius: 100, fontWeight: 800, fontSize: '1.1rem', cursor: 'pointer', boxShadow: '0 8px 20px rgba(46, 125, 50, 0.3)' }}>INIZIA SFIDA</button>
+                </div>
+              ) : activeGame && QUESTS.find(q => q.id === activeGame)?.type === 'beauty' && beautyScore !== null ? (
+                <div style={{ padding: '20px' }}>
+                  {questPhoto && <img src={questPhoto} style={{ width: '100%', borderRadius: 20, marginBottom: 20, maxHeight: 300, objectFit: 'cover', border: '3px solid var(--primary)' }} />}
+
+                  <div style={{ textAlign: 'center', background: 'linear-gradient(135deg, var(--primary-light), var(--accent))', borderRadius: 24, padding: 32, marginBottom: 20 }}>
+                    <Trophy size={64} color="var(--primary)" style={{ margin: '0 auto 16px' }} />
+                    <h2 style={{ margin: 0, color: 'var(--primary)', fontSize: '2rem' }}>Punteggio: {beautyScore}/100</h2>
+                    <p style={{ fontSize: '0.9rem', opacity: 0.8, margin: '12px 0 0' }}>{showBeautyConfirm ? 'Valutazione completata!' : `+${beautyScore} XP guadagnati!`}</p>
+                  </div>
+
+                  {showBeautyConfirm ? (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                      <p style={{ textAlign: 'center', fontSize: '1rem', marginBottom: 8 }}>Vuoi pubblicare questo risultato nella classifica globale?</p>
+                      <button onClick={publishBeautyResult} style={{ width: '100%', background: 'var(--primary)', color: 'white', border: 'none', padding: '16px', borderRadius: 100, fontWeight: 800, cursor: 'pointer', fontSize: '1.1rem' }}>PUBBLICA IN CLASSIFICA</button>
+                      <button onClick={() => { setActiveGame(null); setBeautyScore(null); setQuestPhoto(null); setShowBeautyConfirm(false); }} style={{ width: '100%', background: '#fee', color: '#c00', border: 'none', padding: '16px', borderRadius: 100, fontWeight: 800, cursor: 'pointer' }}>NO, GRAZIE</button>
+                    </div>
+                  ) : (
+                    <>
+                      <div style={{ background: 'var(--white)', borderRadius: 24, padding: 20, border: '1px solid var(--card-border)' }}>
+                        <h3 style={{ marginTop: 0, display: 'flex', alignItems: 'center', gap: 8 }}><Award size={20} color="var(--primary)" /> Top Performer</h3>
+
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 10, maxHeight: '350px', overflowY: 'auto' }}>
+                          {/* LISTA CLASSIFICHE DISPONIBILI (BOX DESIGN AGGIORNATO) */}
+                          <div style={{ marginBottom: 24, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                            {/* Card 1: Concorso Globale */}
+                            <div
+                              onClick={() => { setActiveLeaderboardType('beauty_contest'); fetchLeaderboard(); }}
+                              style={{
+                                background: activeLeaderboardType === 'beauty_contest'
+                                  ? 'linear-gradient(135deg, var(--primary), var(--primary-dark))'
+                                  : 'var(--white)',
+                                color: activeLeaderboardType === 'beauty_contest' ? 'white' : 'var(--dark)',
+                                padding: 16,
+                                borderRadius: 24,
+                                border: `2px solid ${activeLeaderboardType === 'beauty_contest' ? 'transparent' : 'var(--card-border)'}`,
+                                cursor: 'pointer',
+                                transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                                boxShadow: activeLeaderboardType === 'beauty_contest' ? '0 8px 20px rgba(46, 125, 50, 0.3)' : 'none',
+                                transform: activeLeaderboardType === 'beauty_contest' ? 'scale(1.02)' : 'scale(1)',
+                                position: 'relative',
+                                overflow: 'hidden',
+                                height: 160,
+                                display: 'flex',
+                                flexDirection: 'column',
+                                justifyContent: 'space-between'
+                              }}
+                            >
+                              {activeLeaderboardType === 'beauty_contest' && <Sparkles size={80} style={{ position: 'absolute', top: -20, right: -20, opacity: 0.1 }} />}
+
+                              <div>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                                  <div style={{
+                                    background: activeLeaderboardType === 'beauty_contest' ? 'rgba(255,255,255,0.2)' : 'var(--primary-light)',
+                                    padding: 8,
+                                    borderRadius: 12,
+                                    color: activeLeaderboardType === 'beauty_contest' ? 'white' : 'var(--primary)'
+                                  }}>
+                                    <Award size={20} />
+                                  </div>
+                                  {(() => {
+                                    const myRank = leaderboard.findIndex(u => u.username === username);
+                                    return myRank !== -1 ? <div style={{ background: activeLeaderboardType === 'beauty_contest' ? 'white' : 'var(--primary)', color: activeLeaderboardType === 'beauty_contest' ? 'var(--primary)' : 'white', padding: '4px 8px', borderRadius: 8, fontSize: '0.7rem', fontWeight: 800 }}>#{myRank + 1}</div> : null;
+                                  })()}
+                                </div>
+                                <h3 style={{ margin: '12px 0 4px', fontSize: '0.95rem', fontWeight: 800 }}>Generale</h3>
+                                <p style={{ margin: 0, fontSize: '0.75rem', opacity: 0.8, lineHeight: 1.3 }}>Bellezza vegetale assoluta</p>
+                              </div>
+
+                              {/* Mini Preview Classifica */}
+                              <div style={{ display: 'flex', alignItems: 'center', marginTop: 10 }}>
+                                {leaderboard.slice(0, 3).map((u, i) => (
+                                  <div key={i} style={{
+                                    width: 24, height: 24,
+                                    borderRadius: '50%',
+                                    background: activeLeaderboardType === 'beauty_contest' ? 'white' : '#eee',
+                                    border: '2px solid white',
+                                    marginLeft: i > 0 ? -8 : 0,
+                                    fontSize: '0.6rem',
+                                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                    fontWeight: 800,
+                                    color: activeLeaderboardType === 'beauty_contest' ? 'var(--primary)' : '#666'
+                                  }}>
+                                    {u.username.charAt(0).toUpperCase()}
+                                  </div>
+                                ))}
+                                {leaderboard.length > 3 && <div style={{ marginLeft: 6, fontSize: '0.7rem', fontWeight: 700, opacity: 0.8 }}>+{leaderboard.length - 3}</div>}
+                              </div>
+                            </div>
+
+                            {/* Card 2: Sfida Settimanale */}
+                            <div
+                              onClick={() => { setActiveLeaderboardType(weeklyChallenge.id); fetchLeaderboard(false, weeklyChallenge.id); }}
+                              style={{
+                                background: activeLeaderboardType !== 'beauty_contest'
+                                  ? 'linear-gradient(135deg, #FF9800, #F57C00)'
+                                  : 'var(--white)',
+                                color: activeLeaderboardType !== 'beauty_contest' ? 'white' : 'var(--dark)',
+                                padding: 16,
+                                borderRadius: 24,
+                                border: `2px solid ${activeLeaderboardType !== 'beauty_contest' ? 'transparent' : 'var(--card-border)'}`,
+                                cursor: 'pointer',
+                                transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                                boxShadow: activeLeaderboardType !== 'beauty_contest' ? '0 8px 20px rgba(245, 124, 0, 0.3)' : 'none',
+                                transform: activeLeaderboardType !== 'beauty_contest' ? 'scale(1.02)' : 'scale(1)',
+                                position: 'relative',
+                                overflow: 'hidden',
+                                height: 160,
+                                display: 'flex',
+                                flexDirection: 'column',
+                                justifyContent: 'space-between'
+                              }}
+                            >
+                              {activeLeaderboardType !== 'beauty_contest' && <Star size={80} style={{ position: 'absolute', top: -20, right: -20, opacity: 0.1 }} />}
+
+                              <div>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                                  <div style={{
+                                    background: activeLeaderboardType !== 'beauty_contest' ? 'rgba(255,255,255,0.2)' : '#FFF3E0',
+                                    padding: 8,
+                                    borderRadius: 12,
+                                    color: activeLeaderboardType !== 'beauty_contest' ? 'white' : '#F57C00'
+                                  }}>
+                                    <Star size={20} />
+                                  </div>
+                                  {(() => {
+                                    const myRank = weeklyLeaderboard.findIndex(u => u.username === username);
+                                    return myRank !== -1 ? <div style={{ background: activeLeaderboardType !== 'beauty_contest' ? 'white' : '#F57C00', color: activeLeaderboardType !== 'beauty_contest' ? '#F57C00' : 'white', padding: '4px 8px', borderRadius: 8, fontSize: '0.7rem', fontWeight: 800 }}>#{myRank + 1}</div> : null;
+                                  })()}
+                                </div>
+                                <h3 style={{ margin: '12px 0 4px', fontSize: '0.95rem', fontWeight: 800 }}>Settimanale</h3>
+                                <p style={{ margin: 0, fontSize: '0.75rem', opacity: 0.8, lineHeight: 1.3 }}>{weeklyChallenge.requirement}</p>
+                              </div>
+
+                              {/* Mini Preview Classifica */}
+                              <div style={{ display: 'flex', alignItems: 'center', marginTop: 10 }}>
+                                {weeklyLeaderboard.slice(0, 3).map((u, i) => (
+                                  <div key={i} style={{
+                                    width: 24, height: 24,
+                                    borderRadius: '50%',
+                                    background: activeLeaderboardType !== 'beauty_contest' ? 'white' : '#eee',
+                                    border: '2px solid white',
+                                    marginLeft: i > 0 ? -8 : 0,
+                                    fontSize: '0.6rem',
+                                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                    fontWeight: 800,
+                                    color: activeLeaderboardType !== 'beauty_contest' ? '#F57C00' : '#666'
+                                  }}>
+                                    {u.username.charAt(0).toUpperCase()}
+                                  </div>
+                                ))}
+                                {weeklyLeaderboard.length > 3 && <div style={{ marginLeft: 6, fontSize: '0.7rem', fontWeight: 700, opacity: 0.8 }}>+{weeklyLeaderboard.length - 3}</div>}
+                              </div>
+                            </div>
+                          </div>
+
+                          <h3 style={{ marginTop: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
+                            {activeLeaderboardType === 'beauty_contest' ? <Award size={20} color="var(--primary)" /> : <Star size={20} color="#F57C00" />}
+                            {activeLeaderboardType === 'beauty_contest' ? 'Classifica Generale' : weeklyChallenge.title}
+                          </h3>
+
+                          {(activeLeaderboardType === 'beauty_contest' ? leaderboard : weeklyLeaderboard).length === 0 ? <p style={{ opacity: 0.5, textAlign: 'center', margin: '40px 0' }}>Nessun campione ancora...</p> : (activeLeaderboardType === 'beauty_contest' ? leaderboard : weeklyLeaderboard).map((entry: any, idx) => {
+                            if (!entry) return null;
+                            const isTop3 = idx < 3;
+                            const bg = idx === 0 ? 'linear-gradient(135deg, #FFF9C4 0%, #FFFDE7 100%)' :
+                              idx === 1 ? 'linear-gradient(135deg, #F5F5F5 0%, #FAFAFA 100%)' :
+                                idx === 2 ? 'linear-gradient(135deg, #EFEBE9 0%, #FBE9E7 100%)' : 'white';
+
+                            return (
+                              <div key={idx} onClick={() => setSelectedEntry(entry)} style={{
+                                display: 'flex',
+                                justifyContent: 'space-between',
+                                padding: '12px 16px',
+                                background: bg,
+                                borderRadius: 16,
+                                marginBottom: 4,
+                                border: '1px solid var(--card-border)',
+                                cursor: 'pointer',
+                                alignItems: 'center'
+                              }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                                  <div style={{ fontWeight: 800, fontSize: '1.1rem', minWidth: 28, textAlign: 'center' }}>
+                                    {idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : `#${idx + 1}`}
+                                  </div>
+                                  {(entry.image_url || entry.image) && <img src={entry.image_url || entry.image} style={{ width: 36, height: 36, borderRadius: 8, objectFit: 'cover' }} />}
+                                  <div>
+                                    <div style={{ fontWeight: 700, fontSize: '0.9rem', color: entry.username === username ? 'var(--primary)' : 'var(--dark)' }}>{entry.username || 'Anonimo'}</div>
+                                    <div style={{ fontSize: '0.7rem', opacity: 0.5 }}>{entry.score} PT</div>
+                                  </div>
+                                </div>
+                                <ChevronRight size={16} opacity={0.3} />
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                      <button onClick={() => { setActiveGame(null); setBeautyScore(null); setQuestPhoto(null); }} style={{ width: '100%', marginTop: 20, background: 'var(--primary)', color: 'white', border: 'none', padding: '16px', borderRadius: 100, fontWeight: 800, cursor: 'pointer' }}>CHIUDI</button>
+
+                      {selectedEntry && (
+                        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', zIndex: 300, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }} onClick={() => setSelectedEntry(null)}>
+                          <div style={{ background: 'white', borderRadius: 24, padding: 20, maxWidth: 350, width: '100%', textAlign: 'center', position: 'relative' }} onClick={e => e.stopPropagation()}>
+                            <button onClick={() => setSelectedEntry(null)} style={{ position: 'absolute', top: 10, right: 10, background: '#eee', border: 'none', borderRadius: '50%', width: 30, height: 30, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><X size={15} /></button>
+                            <img src={selectedEntry.image_url || selectedEntry.image} style={{ width: '100%', borderRadius: 16, marginBottom: 16, maxHeight: '50vh', objectFit: 'contain', background: '#f5f5f5' }} />
+                            <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 10, marginBottom: 4 }}>
+                              <h2 style={{ color: 'var(--primary)', margin: 0, fontSize: '2.5rem' }}>{selectedEntry.score}</h2>
+                              <span style={{ fontSize: '1rem', opacity: 0.5, fontWeight: 700 }}>/ 100</span>
+                            </div>
+                            <div style={{ margin: '0 0 20px', fontWeight: 800, fontSize: '1.2rem' }}>{selectedEntry.username || 'Anonimo'}</div>
+                            <div style={{ fontSize: '0.85rem', opacity: 0.6, marginBottom: 20 }}>Scattata il {new Date(selectedEntry.created_at || selectedEntry.timestamp || Date.now()).toLocaleDateString()}</div>
+
+                            {selectedEntry.username === username && (
+                              <button onClick={async (e) => {
+                                e.stopPropagation();
+                                if (confirm('Vuoi davvero cancellare questo risultato?')) {
+                                  await deleteLeaderboardEntry(username!);
+                                  const leaderboardResult = await getLeaderboard('all', 100);
+                                  if (leaderboardResult.success && Array.isArray(leaderboardResult.leaderboard)) {
+                                    setLeaderboard(leaderboardResult.leaderboard);
+                                  }
+                                  setSelectedEntry(null);
+                                  setAchievementToast('Risultato rimosso 🗑️');
+                                }
+                              }} style={{ width: '100%', padding: 14, background: '#fee', color: '#c00', border: 'none', borderRadius: 16, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+                                <Trash2 size={18} /> ELIMINA RISULTATO
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
+              ) : activeGame ? (
+                <div style={{ padding: '20px' }}>
+                  {questPhoto && <img src={questPhoto} style={{ width: '100%', borderRadius: 20, marginBottom: 20, maxHeight: 200, objectFit: 'cover' }} />}
+                  <div style={{ background: 'var(--white)', borderRadius: 24, padding: 24, marginBottom: 20, border: '1px solid var(--card-border)' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 20 }}>
+                      <div style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-muted)' }}>Domanda {currentQuestion + 1}/{(() => {
+                        const qId = QUESTS.find(q => q.id === activeGame)?.id;
+                        if (qId === 'general_quiz_2') return QUIZ_QUESTIONS_2.length;
+                        if (qId === 'general_quiz_3') return QUIZ_QUESTIONS_3.length;
+                        return (QUESTS.find(q => q.id === activeGame)?.type === 'quiz' ? QUIZ_QUESTIONS : questQuestions).length;
+                      })()}</div>
+                      <div style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--primary)' }}>Punteggio: {gameScore}</div>
+                    </div>
+                    <h3 style={{ fontSize: '1.1rem', lineHeight: 1.4, marginBottom: 24 }}>
+                      {(() => {
+                        const qId = QUESTS.find(q => q.id === activeGame)?.id;
+                        if (qId === 'general_quiz_2') return QUIZ_QUESTIONS_2[currentQuestion]?.q;
+                        if (qId === 'general_quiz_3') return QUIZ_QUESTIONS_3[currentQuestion]?.q;
+                        return (QUESTS.find(q => q.id === activeGame)?.type === 'quiz'
+                          ? QUIZ_QUESTIONS[currentQuestion]?.q
+                          : questQuestions[currentQuestion]?.question);
+                      })()}
+                    </h3>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                      {((() => {
+                        const qId = QUESTS.find(q => q.id === activeGame)?.id;
+                        if (qId === 'general_quiz_2') return QUIZ_QUESTIONS_2[currentQuestion]?.answers;
+                        if (qId === 'general_quiz_3') return QUIZ_QUESTIONS_3[currentQuestion]?.answers;
+                        return (QUESTS.find(q => q.id === activeGame)?.type === 'quiz'
+                          ? QUIZ_QUESTIONS[currentQuestion]?.answers
+                          : questQuestions[currentQuestion]?.options || []);
+                      })()).map((ans: string, idx: number) => (
+                        <button
+                          key={idx}
+                          onClick={() => !showResult && answerQuestion(idx)}
+                          disabled={showResult}
+                          style={{
+                            padding: '20px 24px', // Increased padding
+                            fontSize: '1.1rem', // Increased font size
+                            borderRadius: 20,
+                            border: showResult && idx === (activeGame === 'general_quiz_2' ? QUIZ_QUESTIONS_2[currentQuestion].correct : activeGame === 'general_quiz_3' ? QUIZ_QUESTIONS_3[currentQuestion].correct : (QUESTS.find(q => q.id === activeGame)?.type === 'quiz' ? QUIZ_QUESTIONS[currentQuestion].correct : questQuestions[currentQuestion].correct)) ? '3px solid var(--primary)' : showResult && idx === selectedAnswer ? '3px solid var(--danger)' : '1px solid var(--card-border)',
+                            background: showResult && idx === (activeGame === 'general_quiz_2' ? QUIZ_QUESTIONS_2[currentQuestion].correct : activeGame === 'general_quiz_3' ? QUIZ_QUESTIONS_3[currentQuestion].correct : (QUESTS.find(q => q.id === activeGame)?.type === 'quiz' ? QUIZ_QUESTIONS[currentQuestion].correct : questQuestions[currentQuestion].correct)) ? '#E8F5E9' : showResult && idx === selectedAnswer ? '#FFEBEE' : 'var(--white)',
+                            color: showResult && idx === (activeGame === 'general_quiz_2' ? QUIZ_QUESTIONS_2[currentQuestion].correct : activeGame === 'general_quiz_3' ? QUIZ_QUESTIONS_3[currentQuestion].correct : (QUESTS.find(q => q.id === activeGame)?.type === 'quiz' ? QUIZ_QUESTIONS[currentQuestion].correct : questQuestions[currentQuestion].correct)) ? 'var(--primary-dark)' : 'var(--dark)',
+                            fontWeight: 800,
+                            cursor: showResult ? 'default' : 'pointer',
+                            textAlign: 'center', // Center text
+                            transition: 'all 0.2s',
+                            width: '100%',
+                            boxShadow: '0 4px 12px rgba(0,0,0,0.05)'
+                          }}
+                        >
+                          {ans}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  {currentQuestion === (QUESTS.find(q => q.id === activeGame)?.type === 'quiz' ? QUIZ_QUESTIONS : questQuestions).length - 1 && showResult && (
+                    <div style={{ textAlign: 'center', padding: 20, background: 'var(--primary-light)', borderRadius: 24, border: '1px solid var(--primary)' }}>
+                      <Trophy size={48} color="var(--primary)" style={{ margin: '0 auto 12px' }} />
+                      <h3 style={{ margin: 0, color: 'var(--primary)' }}>Quiz Completato!</h3>
+                      <p style={{ fontSize: '0.9rem', opacity: 0.8, margin: '8px 0' }}>Hai risposto correttamente a {gameScore}/{(() => {
+                        const qId = QUESTS.find(q => q.id === activeGame)?.id;
+                        if (qId === 'general_quiz_2') return QUIZ_QUESTIONS_2.length;
+                        if (qId === 'general_quiz_3') return QUIZ_QUESTIONS_3.length;
+                        return (QUESTS.find(q => q.id === activeGame)?.type === 'quiz' ? QUIZ_QUESTIONS : questQuestions).length;
+                      })()} domande</p>
+                      <p style={{ fontWeight: 800, color: 'var(--primary)', fontSize: '1.2rem', margin: 0 }}>+{gameScore * 10} XP</p>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <>
                   {!username && (
                     <div style={{
-                      background: 'linear-gradient(135deg, #667eea, #764ba2)',
+                      background: 'linear-gradient(135deg, #FF6B6B, #FF8E53)',
                       padding: '16px',
                       borderRadius: '12px',
                       marginBottom: '16px',
                       color: 'white',
                     }}>
                       <h3 style={{ margin: '0 0 8px 0', fontSize: '16px', fontWeight: '600' }}>
-                        📸 Cronologia Locale
+                        🎮 Sfide Bloccate
                       </h3>
                       <p style={{ margin: '0 0 12px 0', fontSize: '14px', opacity: 0.9 }}>
-                        Le tue foto sono salvate solo su questo dispositivo. Registrati per sincronizzare su tutti i tuoi dispositivi!
+                        Accedi per partecipare alle sfide multiplayer e competere nella classifica globale!
                       </p>
                       <button
                         onClick={() => setShowAuthModal(true)}
                         style={{
                           background: 'white',
-                          color: '#667eea',
+                          color: '#FF6B6B',
                           border: 'none',
                           padding: '10px 20px',
                           borderRadius: '8px',
@@ -3815,503 +4365,1251 @@ function App() {
                           cursor: 'pointer',
                         }}
                       >
-                        REGISTRATI ORA
+                        ACCEDI ORA
                       </button>
                     </div>
                   )}
-                  {history.length === 0 ? <p style={{ opacity: 0.5, textAlign: 'center', marginTop: 40 }}>Ancora nessuna pianta salvata.</p> : history.map(h => (
-                    <div key={h.id} style={{ padding: 14, background: 'var(--white)', borderRadius: 24, marginBottom: 12, display: 'flex', alignItems: 'center', gap: 14, border: '1px solid var(--card-border)', boxShadow: '0 4px 10px rgba(0,0,0,0.02)' }}>
-                      <img src={h.image} style={{ width: 54, height: 54, borderRadius: 14, objectFit: 'cover' }} onClick={() => setFullScreenAnalysis({ ...h, source: 'history' })} />
-                      <div style={{ flex: 1 }} onClick={() => setFullScreenAnalysis({ ...h, source: 'history' })}><div style={{ fontWeight: 800 }}>{h.name}</div><div style={{ fontSize: '0.7rem', opacity: 0.5 }}>{new Date(h.timestamp).toLocaleDateString()}</div></div>
-                      <button onClick={(e) => {
-                        e.stopPropagation();
-                        showDeleteConfirmation('Eliminare questa scansione dalla cronologia?', () => {
-                          const newHistory = history.filter(item => item.id !== h.id);
-                          setHistory(newHistory);
-                        });
-                      }} style={{ background: 'transparent', border: 'none', color: 'var(--danger)', padding: 8, cursor: 'pointer' }}>
-                        <Trash2 size={18} />
-                      </button>
+                  <div style={{ padding: '20px 10px', display: 'flex', flexDirection: 'column', gap: 24 }}>
+                    <div style={{ background: 'linear-gradient(135deg, var(--primary), var(--primary-dark))', borderRadius: 28, padding: 24, color: 'white', position: 'relative', overflow: 'hidden', boxShadow: '0 10px 25px rgba(46, 125, 50, 0.2)' }}>
+                      <div style={{ position: 'absolute', top: -20, right: -20, opacity: 0.1 }}><Award size={150} color="white" /></div>
+
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 16, position: 'relative', zIndex: 1 }}>
+                        <div style={{ width: 80, height: 80, borderRadius: '50%', background: 'rgba(255,255,255,0.2)', border: '4px solid rgba(255,255,255,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '2rem', fontWeight: 900 }}>
+                          {level}
+                        </div>
+                        <div style={{ flex: 1 }}>
+                          <div style={{ opacity: 0.8, fontSize: '0.75rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: 1 }}>Livello Attuale</div>
+                          <h2 style={{ margin: '4px 0', fontSize: '1.4rem', fontWeight: 900 }}>
+                            {level >= 21 ? 'LEGGENDA VIVENTE' :
+                              level >= 13 ? 'MAESTRO ERBORISTA' :
+                                level >= 8 ? 'CUSTODE VERDE' :
+                                  level >= 4 ? 'ESPLORATORE NATURA' : 'APPRENDISTA BOTANICO'}
+                          </h2>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 4, opacity: 0.9, fontSize: '0.85rem' }}>
+                            <Zap size={14} fill="currentColor" /> {xp % 1000} / 1000 XP per il liv. {level + 1}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div style={{ marginTop: 20, height: 8, background: 'rgba(255,255,255,0.15)', borderRadius: 100, overflow: 'hidden' }}>
+                        <div style={{ height: '100%', background: 'white', width: `${((xp % 1000) / 1000) * 100}%`, borderRadius: 100, boxShadow: '0 0 10px white' }}></div>
+                      </div>
                     </div>
-                  ))}
+
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                      <div style={{ background: 'var(--white)', padding: 20, borderRadius: 24, border: '1px solid var(--card-border)', textAlign: 'center' }}>
+                        <div style={{ fontSize: '1.8rem', fontWeight: 900, color: 'var(--primary)' }}>{completedQuests.length}</div>
+                        <div style={{ fontSize: '0.7rem', opacity: 0.6, fontWeight: 700, textTransform: 'uppercase' }}>Sfide Completate</div>
+                      </div>
+                      <div style={{ background: 'var(--white)', padding: 20, borderRadius: 24, border: '1px solid var(--card-border)', textAlign: 'center' }}>
+                        <div style={{ fontSize: '1.8rem', fontWeight: 900, color: '#FFD700' }}>
+                          {level >= 21 ? '🥇' : level >= 13 ? '🥈' : level >= 8 ? '🥉' : '🌱'}
+                        </div>
+                        <div style={{ fontSize: '0.7rem', opacity: 0.6, fontWeight: 700, textTransform: 'uppercase' }}>Rango Attuale</div>
+                      </div>
+                    </div>
+                  </div>
+                  {QUESTS.map(q => {
+                    const done = completedQuests.includes(q.id);
+                    const progress = questProgress[q.id] || 0;
+                    const isMultiplayer = q.type === 'beauty';
+                    const isQuiz = q.type === 'quiz';
+                    return (
+                      <div key={q.id} className="quest-card" style={{ opacity: done ? 0.6 : 1, border: isMultiplayer ? '2px solid #FFD700' : isQuiz ? '2px solid #9C27B0' : done ? '2px solid var(--primary)' : '1px solid var(--card-border)', background: isMultiplayer ? 'linear-gradient(135deg, rgba(255, 215, 0, 0.1), rgba(255, 215, 0, 0.05))' : isQuiz ? 'linear-gradient(135deg, rgba(156, 39, 176, 0.1), rgba(156, 39, 176, 0.05))' : 'var(--white)' }}>
+                        <div className="quest-icon" style={{ background: done ? 'var(--primary-light)' : isMultiplayer ? 'rgba(255, 215, 0, 0.2)' : isQuiz ? 'rgba(156, 39, 176, 0.2)' : '' }}>{done ? <CheckCircle2 size={24} color="var(--primary)" /> : q.icon}</div>
+                        <div style={{ flex: 1 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                            <div style={{ fontWeight: 800 }}>{q.title}</div>
+                            {isMultiplayer && <div style={{ background: '#FFD700', color: 'white', padding: '2px 8px', borderRadius: 100, fontSize: '0.65rem', fontWeight: 800 }}>MULTIPLAYER</div>}
+                            {isQuiz && <div style={{ background: '#9C27B0', color: 'white', padding: '2px 8px', borderRadius: 100, fontSize: '0.65rem', fontWeight: 800 }}>QUIZ</div>}
+                          </div>
+                          <div style={{ fontSize: '0.75rem', opacity: 0.6 }}>{q.desc}</div>
+                          {q.count && progress > 0 && !done && <div style={{ fontSize: '0.7rem', color: 'var(--primary)', fontWeight: 700, marginTop: 4 }}>Progresso: {progress}/{q.count}</div>}
+                        </div>
+                        {!done && <button onClick={() => startGame(q.id)} style={{ background: isMultiplayer ? '#FFD700' : isQuiz ? '#9C27B0' : 'var(--primary)', color: 'white', border: 'none', padding: '8px 16px', borderRadius: 100, fontWeight: 800, fontSize: '0.75rem', cursor: 'pointer' }}>GIOCA</button>}
+                        {done && <div style={{ fontWeight: 800, color: 'var(--primary)' }}>✓ +{q.xp} XP</div>}
+                      </div>
+                    );
+                  })}
+                </>
+              )}
+            </div>
+          </div>
+        )
+      }
+
+      {
+        isSettingsOpen && (
+          <div className="side-overlay">
+            {/* Banner Header Integrato - Impostazioni */}
+            {/* Banner Header Integrato - Impostazioni (Uniformato) */}
+            <div style={{
+              background: 'linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%)',
+              padding: '24px 20px 28px',
+              position: 'relative',
+              boxShadow: '0 4px 20px rgba(0,0,0,0.15)',
+              overflow: 'hidden',
+              borderBottomLeftRadius: 32,
+              borderBottomRightRadius: 32,
+              flexShrink: 0
+            }}>
+              <Sprout size={140} style={{ position: 'absolute', right: -20, top: -20, opacity: 0.1, color: 'white', transform: 'rotate(15deg)' }} />
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: 16, position: 'relative', zIndex: 1 }}>
+                <button
+                  className="btn-header-icon"
+                  onClick={() => setIsSettingsOpen(false)}
+                  style={{
+                    background: 'rgba(255,255,255,0.2)',
+                    color: 'white',
+                    border: 'none',
+                    width: 40,
+                    height: 40,
+                    borderRadius: 12,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    cursor: 'pointer'
+                  }}>
+                  <ChevronLeft size={24} />
+                </button>
+
+                <div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <User size={24} color="white" fill="white" fillOpacity={0.3} />
+                    <h2 style={{ margin: 0, color: 'white', fontSize: '1.5rem', fontWeight: 800, textShadow: '0 2px 4px rgba(0,0,0,0.1)' }}>Impostazioni</h2>
+                  </div>
+                  <div style={{ color: 'rgba(255,255,255,0.85)', fontSize: '0.85rem', marginTop: 4, fontWeight: 500 }}>Personalizza la tua esperienza</div>
                 </div>
               </div>
-            )
-          }
+            </div>
+            <div className="overlay-content">
+              <div className="profile-card">
+                <div className="profile-avatar"><User size={32} /></div>
+                <div>
+                  <div style={{ fontWeight: 800, fontSize: '1.2rem' }}>
+                    {username || 'Ospite'}
+                  </div>
+                  <div style={{ fontSize: '0.85rem', opacity: 0.9 }}>
+                    {username ? 'Utente Registrato' : `Livello ${level} • Non registrato`}
+                  </div>
+                </div>
+              </div>
 
-          {
-            isGamesOpen && (
-              <div className="side-overlay">
-                {/* Banner Header Integrato - Sfide */}
-                <div style={{
-                  background: 'linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%)',
-                  padding: '24px 20px 28px',
-                  position: 'relative',
-                  boxShadow: '0 4px 20px rgba(0,0,0,0.15)',
-                  overflow: 'hidden',
-                  borderBottomLeftRadius: 32,
-                  borderBottomRightRadius: 32,
-                  flexShrink: 0
-                }}>
-                  <Sprout size={140} style={{ position: 'absolute', right: -20, top: -20, opacity: 0.1, color: 'white', transform: 'rotate(15deg)' }} />
+              {!username ? (
+                <button
+                  onClick={() => setShowAuthModal(true)}
+                  style={{
+                    width: '100%',
+                    padding: '16px',
+                    background: 'var(--primary)',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '12px',
+                    fontSize: '16px',
+                    fontWeight: '600',
+                    cursor: 'pointer',
+                    marginBottom: '24px',
+                  }}
+                >
+                  ACCEDI O REGISTRATI
+                </button>
+              ) : (
+                <button
+                  onClick={async () => {
+                    clearLocalUsername();
+                    setUsername(null);
+                    alert('Logout effettuato!');
+                  }}
+                  style={{
+                    width: '100%',
+                    padding: '16px',
+                    background: '#fee',
+                    color: '#c00',
+                    border: 'none',
+                    borderRadius: '12px',
+                    fontSize: '16px',
+                    fontWeight: '600',
+                    cursor: 'pointer',
+                    marginBottom: '24px',
+                  }}
+                >
+                  <LogOut size={20} style={{ marginRight: '8px', display: 'inline' }} />
+                  Esci
+                </button>
+              )}
 
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 16, position: 'relative', zIndex: 1 }}>
-                    <button
-                      className="btn-header-icon"
-                      onClick={() => { setIsGamesOpen(false); setActiveGame(null); setShowQuestIntro(false); }}
-                      style={{
-                        background: 'rgba(255,255,255,0.2)',
-                        color: 'white',
-                        border: 'none',
-                        width: 40,
-                        height: 40,
-                        borderRadius: 12,
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        cursor: 'pointer'
-                      }}>
-                      <ChevronLeft size={24} />
-                    </button>
+              <div className="settings-section">
+                <div className="settings-section-title">DevTools</div>
+                <div className="devtools-card">
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <div className="settings-icon-box" style={{ background: 'var(--primary-dark)', color: 'white' }}><Code size={18} /></div>
+                    <div style={{ fontWeight: 800, fontSize: '0.9rem' }}>BY CASTRO MASSIMO</div>
+                  </div>
+                  <p style={{ fontSize: '0.85rem', lineHeight: 1.5, margin: 0, opacity: 0.8 }}>
+                    Questa App è realizzata da <b>DevTools by Castro Massimo</b>. Se hai bisogno di supporto, segnalazioni o di WebApp personalizzate contattaci.
+                  </p>
+                  <a href="mailto:castromassimo@gmail.com" className="btn-contact">
+                    <Mail size={18} /> CONTATTACI VIA E-MAIL
+                  </a>
+                </div>
+              </div>
 
-                    <div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                        <Gamepad2 size={24} color="white" fill="white" fillOpacity={0.3} />
-                        <h2 style={{ margin: 0, color: 'white', fontSize: '1.5rem', fontWeight: 800, textShadow: '0 2px 4px rgba(0,0,0,0.1)' }}>Sfide Botaniche</h2>
-                      </div>
-                      <div style={{ color: 'rgba(255,255,255,0.85)', fontSize: '0.85rem', marginTop: 4, fontWeight: 500 }}>Completa missioni e guadagna XP</div>
+
+
+              <div className="settings-section">
+                <div className="settings-section-title">Preferenze App</div>
+                <div className="settings-group">
+                  <div className="settings-row" onClick={() => setDarkMode(!darkMode)}>
+                    <div className="settings-icon-box"><Moon size={18} /></div>
+                    <span style={{ flex: 1, fontWeight: 600 }}>Modalità Scura</span>
+                    <div className={`toggle-switch ${darkMode ? 'active' : ''}`}></div>
+                  </div>
+                  <div className="settings-row" onClick={async () => {
+                    if (!notificationsEnabled) {
+                      // Abilita: richiedi permessi
+                      if ('Notification' in window) {
+                        const permission = await Notification.requestPermission();
+                        if (permission === 'granted') {
+                          setNotificationsEnabled(true);
+                          setAchievementToast('✅ Notifiche attivate! Riceverai promemoria per le tue piante.');
+                          setTimeout(() => setAchievementToast(null), 3000);
+                          // Registra SW
+                          if ('serviceWorker' in navigator) {
+                            registerServiceWorker();
+                          }
+                        } else {
+                          alert('⚠️ Permesso negato. Abilita le notifiche dalle impostazioni del browser.');
+                        }
+                      } else {
+                        alert('❌ Il tuo browser non supporta le notifiche.');
+                      }
+                    } else {
+                      // Disabilita
+                      setNotificationsEnabled(false);
+                      setAchievementToast('🔕 Notifiche disattivate.');
+                      setTimeout(() => setAchievementToast(null), 3000);
+                    }
+                  }}>
+                    <div className="settings-icon-box"><Bell size={18} /></div>
+                    <span style={{ flex: 1, fontWeight: 600 }}>Notifiche Cura</span>
+                    <div className={`toggle-switch ${notificationsEnabled ? 'active' : ''}`}></div>
+                  </div>
+                </div>
+              </div>
+
+              {username && (
+                <div className="settings-section">
+                  <div className="settings-section-title">Account</div>
+                  <div className="settings-group">
+                    <div className="settings-row" onClick={() => {
+                      const newUsername = prompt("Inserisci nuovo nome utente:", username);
+                      if (newUsername) {
+                        setUsername(newUsername);
+                        setLocalUsername(newUsername);
+                        alert("Nome utente aggiornato!");
+                      }
+                    }}>
+                      <div className="settings-icon-box"><User size={18} /></div>
+                      <span style={{ flex: 1, fontWeight: 600 }}>Modifica Nome Utente</span>
+                      <ChevronRight size={16} opacity={0.3} />
                     </div>
                   </div>
                 </div>
-                <div className="overlay-content">
-                  {showQuestIntro ? (
-                    <div style={{ padding: '20px' }}>
-                      <div style={{ background: 'linear-gradient(135deg, var(--primary), var(--primary-dark))', borderRadius: 24, padding: 32, color: 'white', marginBottom: 24, textAlign: 'center' }}>
-                        <div style={{ fontSize: '3rem', marginBottom: 12 }}>{QUESTS.find(q => q.id === activeGame)?.icon}</div>
-                        <h2 style={{ margin: '0 0 8px', fontSize: '1.5rem' }}>{QUESTS.find(q => q.id === activeGame)?.title}</h2>
-                        <div style={{ opacity: 0.9, fontSize: '0.9rem' }}>{QUESTS.find(q => q.id === activeGame)?.desc}</div>
-                      </div>
-                      <div style={{ background: 'var(--white)', borderRadius: 24, padding: 24, border: '1px solid var(--card-border)', marginBottom: 20 }}>
-                        <h3 style={{ marginTop: 0, color: 'var(--primary)' }}>Come Funziona:</h3>
-                        {QUESTS.find(q => q.id === activeGame)?.type === 'quiz' ? (
-                          <ul style={{ lineHeight: 1.8, paddingLeft: 20 }}>
-                            <li>Rispondi a <b>8 domande</b> sulla botanica</li>
-                            <li>Ottieni <b>10 XP</b> per ogni risposta corretta</li>
-                            <li>Completa la sfida rispondendo correttamente ad almeno <b>5/8 domande</b></li>
-                            <li>Ricevi <b>+{QUESTS.find(q => q.id === activeGame)?.xp} XP bonus</b> al completamento!</li>
-                          </ul>
-                        ) : QUESTS.find(q => q.id === activeGame)?.type === 'beauty' ? (
-                          <ul style={{ lineHeight: 1.8, paddingLeft: 20 }}>
-                            <li>Fotografa il <b>fiore o pianta più bello</b> che riesci a trovare</li>
-                            <li>L'AI valuterà la bellezza da <b>1 a 100</b> considerando colori, simmetria e composizione</li>
-                            <li>Ottieni <b>XP pari al punteggio</b> ricevuto</li>
-                            <li>Competi nella <b>classifica globale</b> con gli altri utenti!</li>
-                            <li>Il punteggio più alto vince <b>+{QUESTS.find(q => q.id === activeGame)?.xp} XP bonus</b></li>
-                          </ul>
-                        ) : (
-                          <ul style={{ lineHeight: 1.8, paddingLeft: 20 }}>
-                            <li>Trova e fotografa <b>{QUESTS.find(q => q.id === activeGame)?.requirement}</b></li>
-                            <li>L'AI genererà <b>3 domande specifiche</b> sulla tua foto</li>
-                            <li>Rispondi correttamente ad almeno <b>2/3 domande</b></li>
-                            <li>Ottieni <b>10 XP</b> per risposta corretta + <b>+{QUESTS.find(q => q.id === activeGame)?.xp} XP bonus</b>!</li>
-                            {QUESTS.find(q => q.id === activeGame)?.count && <li>Ripeti per <b>{QUESTS.find(q => q.id === activeGame)?.count} volte</b> per completare la sfida</li>}
-                          </ul>
-                        )}
-                      </div>
-                      <button onClick={startQuestAfterIntro} style={{ width: '100%', background: 'var(--primary)', color: 'white', border: 'none', padding: '18px', borderRadius: 100, fontWeight: 800, fontSize: '1.1rem', cursor: 'pointer', boxShadow: '0 8px 20px rgba(46, 125, 50, 0.3)' }}>INIZIA SFIDA</button>
+              )}
+
+              <div className="settings-section">
+                <div className="settings-section-title">Sicurezza & Dati</div>
+                <div className="settings-group">
+                  <div className="settings-row" onClick={() => (window as any).aistudio && (window as any).aistudio.openSelectKey()}>
+                    <div className="settings-icon-box"><Key size={18} /></div>
+                    <span style={{ flex: 1, fontWeight: 600 }}>Configura API Key</span>
+                    <ExternalLink size={16} opacity={0.3} />
+                  </div>
+                  <div className="settings-row" onClick={() => setIsPrivacyOpen(true)}>
+                    <div className="settings-icon-box"><ShieldCheck size={18} /></div>
+                    <span style={{ flex: 1, fontWeight: 600 }}>Privacy e Sicurezza</span>
+                    <ChevronRight size={16} opacity={0.3} />
+                  </div>
+                </div>
+              </div>
+
+              {/* Privacy Modal */}
+              {isPrivacyOpen && (
+                <div className="side-overlay" style={{ zIndex: 600 }}>
+                  <div style={{
+                    background: 'var(--white)',
+                    height: '100%',
+                    display: 'flex',
+                    flexDirection: 'column'
+                  }}>
+                    <div style={{
+                      padding: '20px',
+                      borderBottom: '1px solid var(--card-border)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 16
+                    }}>
+                      <button onClick={() => setIsPrivacyOpen(false)} style={{ background: 'none', border: 'none', padding: 4, cursor: 'pointer' }}>
+                        <ChevronLeft size={24} color="var(--dark)" />
+                      </button>
+                      <h2 style={{ margin: 0, fontSize: '1.2rem' }}>Privacy & Termini</h2>
                     </div>
-                  ) : activeGame && QUESTS.find(q => q.id === activeGame)?.type === 'beauty' && beautyScore !== null ? (
-                    <div style={{ padding: '20px' }}>
-                      {questPhoto && <img src={questPhoto} style={{ width: '100%', borderRadius: 20, marginBottom: 20, maxHeight: 300, objectFit: 'cover', border: '3px solid var(--primary)' }} />}
 
-                      <div style={{ textAlign: 'center', background: 'linear-gradient(135deg, var(--primary-light), var(--accent))', borderRadius: 24, padding: 32, marginBottom: 20 }}>
-                        <Trophy size={64} color="var(--primary)" style={{ margin: '0 auto 16px' }} />
-                        <h2 style={{ margin: 0, color: 'var(--primary)', fontSize: '2rem' }}>Punteggio: {beautyScore}/100</h2>
-                        <p style={{ fontSize: '0.9rem', opacity: 0.8, margin: '12px 0 0' }}>{showBeautyConfirm ? 'Valutazione completata!' : `+${beautyScore} XP guadagnati!`}</p>
+                    <div style={{ padding: '24px', overflowY: 'auto', flex: 1 }}>
+                      <section style={{ marginBottom: 32 }}>
+                        <h3 style={{ color: 'var(--primary)', display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <ShieldCheck size={20} /> Informativa Privacy
+                        </h3>
+                        <p style={{ fontSize: '0.9rem', lineHeight: 1.6, opacity: 0.8 }}>
+                          Ultimo aggiornamento: Gennaio 2026
+                        </p>
+                        <p style={{ fontSize: '0.95rem', lineHeight: 1.6 }}>
+                          La tua privacy è fondamentale per noi. BioExpert è progettata per minimizzare la raccolta di dati personali.
+                        </p>
+
+                        <h4 style={{ marginTop: 20, marginBottom: 8 }}>1. Raccolta Dati</h4>
+                        <p style={{ fontSize: '0.9rem', lineHeight: 1.6, opacity: 0.8 }}>
+                          BioExpert raccoglie solo i dati strettamente necessari al funzionamento dell'app:
+                          <ul style={{ paddingLeft: 20, marginTop: 8 }}>
+                            <li><b>Foto delle piante:</b> Vengono analizzate dall'AI e salvate solo se esplicitamente richiesto (es. Classifiche).</li>
+                            <li><b>Dati di gioco (XP, Livello):</b> Salvati localmente e sincronizzati per le classifiche.</li>
+                            <li><b>Local Storage:</b> Utilizziamo la memoria del tuo dispositivo per salvare preferenze e progressi.</li>
+                          </ul>
+                        </p>
+
+                        <h4 style={{ marginTop: 20, marginBottom: 8 }}>2. Trattamento Immagini AI</h4>
+                        <p style={{ fontSize: '0.9rem', lineHeight: 1.6, opacity: 0.8 }}>
+                          Le immagini caricate per l'analisi o le sfide vengono processate da Google Gemini AI. Non conserviamo le immagini sui nostri server in modo permanente salvo per le "Classifiche" pubbliche, dove l'immagine è visibile agli altri utenti.
+                        </p>
+                      </section>
+
+                      <section style={{ marginBottom: 32 }}>
+                        <h3 style={{ color: 'var(--primary)', display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <FileText size={20} /> Termini di Servizio
+                        </h3>
+
+                        <h4 style={{ marginTop: 20, marginBottom: 8 }}>1. Utilizzo dell'App</h4>
+                        <p style={{ fontSize: '0.9rem', lineHeight: 1.6, opacity: 0.8 }}>
+                          L'uso di BioExpert è consentito per scopi personali, educativi e ludici. È vietato caricare contenuti offensivi, appropriati, o che violino copyright altrui.
+                        </p>
+
+                        <h4 style={{ marginTop: 20, marginBottom: 8 }}>2. Avvertenza AI (Disclaimer)</h4>
+                        <p style={{ fontSize: '0.9rem', lineHeight: 1.6, opacity: 0.8, background: '#FFF3E0', padding: 12, borderRadius: 12, borderLeft: '4px solid #FFB74D' }}>
+                          <b>IMPORTANTE:</b> I consigli, le diagnosi e le identificazioni fornite dall'Intelligenza Artificiale sono a scopo puramente informativo e ludico. Non sostituiscono il parere professionale di un botanico o agronomo. Non usare per funghi commestibili o piante medicinali con scopi di salute.
+                        </p>
+
+                        <h4 style={{ marginTop: 20, marginBottom: 8 }}>3. Condotta Classifiche</h4>
+                        <p style={{ fontSize: '0.9rem', lineHeight: 1.6, opacity: 0.8 }}>
+                          Ci riserviamo il diritto di rimuovere dalla classifica e bannare utenti che caricano foto non pertinenti (spam), false o inappropriate, grazie ai nostri sistemi di validazione AI automatici.
+                        </p>
+                      </section>
+
+                      <div style={{ textAlign: 'center', marginTop: 40, opacity: 0.5, fontSize: '0.8rem' }}>
+                        BioExpert © 2026 - Tutti i diritti riservati<br />
+                        Sviluppato da Castro Massimo
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              <div className="settings-section">
+                <div className="settings-section-title">Sistema</div>
+                <div className="settings-group">
+                  <div className="settings-row" style={{ color: 'var(--danger)' }} onClick={() => {
+                    showDeleteConfirmation("Cancellare tutti i dati e resettare l'app?", () => {
+                      localStorage.clear();
+                      window.location.reload();
+                    });
+                  }}>
+                    <div className="settings-icon-box" style={{ background: '#FFF0F0', color: 'var(--danger)' }}><Trash2 size={18} /></div>
+                    <span style={{ flex: 1, fontWeight: 600 }}>Resetta Applicazione</span>
+                  </div>
+                  <div className="settings-row" onClick={() => alert("BioExpert v1.2.0")}>
+                    <div className="settings-icon-box"><Info size={18} /></div>
+                    <span style={{ flex: 1, fontWeight: 600 }}>Versione App</span>
+                    <span style={{ fontSize: '0.8rem', opacity: 0.4 }}>1.2.0</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )
+      }
+
+      {
+        fullScreenAnalysis && (
+          <div className="side-overlay">
+            {/* Banner Header Integrato - Dettaglio Pianta */}
+            <div style={{
+              background: 'linear-gradient(135deg, var(--primary), #4CAF50)',
+              padding: '20px 16px 24px',
+              boxShadow: '0 4px 12px rgba(0,0,0,0.1)'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 8 }}>
+                <button
+                  className="btn-header-icon"
+                  onClick={() => { setFullScreenAnalysis(null); setDetailTab('info'); }}
+                  style={{ background: 'rgba(255,255,255,0.3)', color: 'white' }}
+                >
+                  <ChevronLeft size={24} />
+                </button>
+                <h2 style={{
+                  margin: 0,
+                  color: 'white',
+                  fontSize: '1.5rem',
+                  fontWeight: 900,
+                  textShadow: '0 2px 4px rgba(0,0,0,0.2)',
+                  flex: 1
+                }}>
+                  🌿 {fullScreenAnalysis.name || 'Dettaglio Pianta'}
+                </h2>
+              </div>
+              <div style={{ fontSize: '0.85rem', color: 'rgba(255,255,255,0.9)', fontWeight: 600 }}>
+                {fullScreenAnalysis.scientificName || 'Informazioni e cura'}
+              </div>
+            </div>
+            <div className="overlay-content" style={{ paddingBottom: 100 }}>
+              <img src={fullScreenAnalysis.image || 'https://placehold.co/600x400?text=No+Image'} style={{ width: '100%', borderRadius: 32, marginBottom: 16, boxShadow: '0 10px 30px rgba(0,0,0,0.1)', minHeight: 200, objectFit: 'cover', background: '#f0f0f0' }} onError={(e) => (e.currentTarget.src = 'https://placehold.co/600x400?text=No+Image')} />
+
+              {fullScreenAnalysis.source === 'garden' && (
+                <div style={{ display: 'flex', background: 'var(--primary-light)', padding: 4, borderRadius: 16, marginBottom: 20 }}>
+                  <button onClick={() => setDetailTab('info')} style={{ flex: 1, padding: '10px', borderRadius: 12, border: 'none', background: detailTab === 'info' ? 'var(--primary)' : 'transparent', color: detailTab === 'info' ? 'white' : 'var(--primary)', fontWeight: 700, cursor: 'pointer', fontSize: '0.75rem' }}>INFO</button>
+                  <button onClick={() => setDetailTab('care')} style={{ flex: 1, padding: '10px', borderRadius: 12, border: 'none', background: detailTab === 'care' ? 'var(--primary)' : 'transparent', color: detailTab === 'care' ? 'white' : 'var(--primary)', fontWeight: 700, cursor: 'pointer', fontSize: '0.75rem' }}>CURA</button>
+                  <button onClick={() => setDetailTab('history')} style={{ flex: 1, padding: '10px', borderRadius: 12, border: 'none', background: detailTab === 'history' ? 'var(--primary)' : 'transparent', color: detailTab === 'history' ? 'white' : 'var(--primary)', fontWeight: 700, cursor: 'pointer', fontSize: '0.75rem' }}>ALBUM</button>
+                </div>
+              )}
+
+              {detailTab === 'info' ? (
+                <>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                    <div>
+                      <h2 style={{ margin: 0, fontSize: '1.8rem' }}>{fullScreenAnalysis.name}</h2>
+                      <p style={{ opacity: 0.6, fontStyle: 'italic', marginTop: 4 }}>{fullScreenAnalysis.scientificName}</p>
+                    </div>
+                    <div className={`status-badge ${fullScreenAnalysis.healthStatus === 'healthy' ? 'status-healthy' : 'status-sick'}`}>
+                      {fullScreenAnalysis.healthStatus === 'healthy' ? 'Sana' : 'Malata'}
+                    </div>
+                  </div>
+
+                  <div style={{ padding: 20, background: 'var(--white)', borderRadius: 28, border: '1px solid var(--card-border)', marginTop: 24 }}>
+                    <h4 style={{ margin: '0 0 12px 0', display: 'flex', alignItems: 'center', gap: 8 }}><ShieldCheck size={18} color="var(--primary)" /> Diagnosi {fullScreenAnalysis.healthStatus === 'sick' ? 'e Problemi' : ''}</h4>
+                    <p style={{ fontSize: '0.95rem', lineHeight: 1.6 }}>{fullScreenAnalysis.diagnosis}</p>
+
+                    <h4 style={{ margin: '24px 0 12px 0', display: 'flex', alignItems: 'center', gap: 8 }}><Heart size={18} color="var(--danger)" /> Consigli Rapidi</h4>
+                    <div className="care-grid">
+                      <div className="care-item">
+                        <div className="care-item-title"><Droplets size={16} /> Irrigazione</div>
+                        <div className="care-item-desc">{fullScreenAnalysis.care.watering}</div>
+                      </div>
+                      <div className="care-item">
+                        <div className="care-item-title"><Sun size={16} /> Esposizione</div>
+                        <div className="care-item-desc">{fullScreenAnalysis.care.general}</div>
+                      </div>
+                      <div className="care-item">
+                        <div className="care-item-title"><Scissors size={16} /> Potatura</div>
+                        <div className="care-item-desc">{fullScreenAnalysis.care.pruning}</div>
+                      </div>
+                      <div className="care-item">
+                        <div className="care-item-title"><Inbox size={16} /> Rinvaso</div>
+                        <div className="care-item-desc">{fullScreenAnalysis.care.repotting}</div>
+                      </div>
+                    </div>
+                  </div>
+                </>
+              ) : detailTab === 'care' ? (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+
+                  {/* Sistema di Cura Progressivo */}
+                  {activeCareProgram && activeCareProgram.program ? (
+                    // Dashboard Programma Attivo
+                    <div style={{
+                      padding: 24,
+                      background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                      borderRadius: 24,
+                      boxShadow: '0 10px 40px rgba(102, 126, 234, 0.3)',
+                      color: 'white'
+                    }}>
+
+                      {/* Progress Ring */}
+                      <div style={{ textAlign: 'center', marginBottom: 24 }}>
+                        <div style={{
+                          width: 140,
+                          height: 140,
+                          margin: '0 auto',
+                          borderRadius: '50%',
+                          background: `conic-gradient(#FFD700 ${activeCareProgram.program.completionPercentage || 0}%, rgba(255,255,255,0.2) 0)`,
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          position: 'relative',
+                          boxShadow: '0 8px 32px rgba(0,0,0,0.2)'
+                        }}>
+                          <div style={{
+                            width: 110,
+                            height: 110,
+                            borderRadius: '50%',
+                            background: 'rgba(255,255,255,0.95)',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            alignItems: 'center',
+                            justifyContent: 'center'
+                          }}>
+                            <div style={{ fontSize: '2.2rem', fontWeight: 900, color: '#667eea' }}>
+                              {activeCareProgram.program.completionPercentage || 0}%
+                            </div>
+                            <div style={{ fontSize: '0.7rem', opacity: 0.6, color: '#333' }}>Completato</div>
+                          </div>
+                        </div>
+                        <div style={{ marginTop: 16, fontSize: '1.1rem', fontWeight: 800, textShadow: '0 2px 4px rgba(0,0,0,0.2)' }}>
+                          🌿 Fase {activeCareProgram.program.current_phase} di {activeCareProgram.program.total_phases}
+                        </div>
+                        <div style={{ fontSize: '0.9rem', opacity: 0.9, marginTop: 4 }}>
+                          {activeCareProgram.currentPhase?.title || 'Caricamento...'}
+                        </div>
                       </div>
 
-                      {showBeautyConfirm ? (
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                          <p style={{ textAlign: 'center', fontSize: '1rem', marginBottom: 8 }}>Vuoi pubblicare questo risultato nella classifica globale?</p>
-                          <button onClick={publishBeautyResult} style={{ width: '100%', background: 'var(--primary)', color: 'white', border: 'none', padding: '16px', borderRadius: 100, fontWeight: 800, cursor: 'pointer', fontSize: '1.1rem' }}>PUBBLICA IN CLASSIFICA</button>
-                          <button onClick={() => { setActiveGame(null); setBeautyScore(null); setQuestPhoto(null); setShowBeautyConfirm(false); }} style={{ width: '100%', background: '#fee', color: '#c00', border: 'none', padding: '16px', borderRadius: 100, fontWeight: 800, cursor: 'pointer' }}>NO, GRAZIE</button>
+                      {/* Fase Corrente Card */}
+                      {activeCareProgram.currentPhase && (
+                        <div style={{
+                          background: 'rgba(255,255,255,0.15)',
+                          backdropFilter: 'blur(10px)',
+                          padding: 20,
+                          borderRadius: 20,
+                          marginBottom: 20,
+                          border: '1px solid rgba(255,255,255,0.2)'
+                        }}>
+                          <div style={{ fontWeight: 800, fontSize: '1rem', marginBottom: 8 }}>
+                            {activeCareProgram.currentPhase.title}
+                          </div>
+                          <div style={{ fontSize: '0.85rem', opacity: 0.9, lineHeight: 1.5 }}>
+                            {activeCareProgram.currentPhase.description}
+                          </div>
+                          <div style={{ fontSize: '0.75rem', marginTop: 12, opacity: 0.8 }}>
+                            ⏱️ Durata: {activeCareProgram.currentPhase.duration_days} giorni
+                          </div>
                         </div>
-                      ) : (
-                        <>
-                          <div style={{ background: 'var(--white)', borderRadius: 24, padding: 20, border: '1px solid var(--card-border)' }}>
-                            <h3 style={{ marginTop: 0, display: 'flex', alignItems: 'center', gap: 8 }}><Award size={20} color="var(--primary)" /> Top Performer</h3>
+                      )}
 
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: 10, maxHeight: '350px', overflowY: 'auto' }}>
-                              {/* LISTA CLASSIFICHE DISPONIBILI (BOX DESIGN AGGIORNATO) */}
-                              <div style={{ marginBottom: 24, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                                {/* Card 1: Concorso Globale */}
-                                <div
-                                  onClick={() => { setActiveLeaderboardType('beauty_contest'); fetchLeaderboard(); }}
-                                  style={{
-                                    background: activeLeaderboardType === 'beauty_contest'
-                                      ? 'linear-gradient(135deg, var(--primary), var(--primary-dark))'
-                                      : 'var(--white)',
-                                    color: activeLeaderboardType === 'beauty_contest' ? 'white' : 'var(--dark)',
-                                    padding: 16,
-                                    borderRadius: 24,
-                                    border: `2px solid ${activeLeaderboardType === 'beauty_contest' ? 'transparent' : 'var(--card-border)'}`,
-                                    cursor: 'pointer',
-                                    transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-                                    boxShadow: activeLeaderboardType === 'beauty_contest' ? '0 8px 20px rgba(46, 125, 50, 0.3)' : 'none',
-                                    transform: activeLeaderboardType === 'beauty_contest' ? 'scale(1.02)' : 'scale(1)',
-                                    position: 'relative',
-                                    overflow: 'hidden',
-                                    height: 160,
-                                    display: 'flex',
-                                    flexDirection: 'column',
-                                    justifyContent: 'space-between'
-                                  }}
-                                >
-                                  {activeLeaderboardType === 'beauty_contest' && <Sparkles size={80} style={{ position: 'absolute', top: -20, right: -20, opacity: 0.1 }} />}
-
-                                  <div>
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                                      <div style={{
-                                        background: activeLeaderboardType === 'beauty_contest' ? 'rgba(255,255,255,0.2)' : 'var(--primary-light)',
-                                        padding: 8,
-                                        borderRadius: 12,
-                                        color: activeLeaderboardType === 'beauty_contest' ? 'white' : 'var(--primary)'
-                                      }}>
-                                        <Award size={20} />
-                                      </div>
-                                      {(() => {
-                                        const myRank = leaderboard.findIndex(u => u.username === username);
-                                        return myRank !== -1 ? <div style={{ background: activeLeaderboardType === 'beauty_contest' ? 'white' : 'var(--primary)', color: activeLeaderboardType === 'beauty_contest' ? 'var(--primary)' : 'white', padding: '4px 8px', borderRadius: 8, fontSize: '0.7rem', fontWeight: 800 }}>#{myRank + 1}</div> : null;
-                                      })()}
-                                    </div>
-                                    <h3 style={{ margin: '12px 0 4px', fontSize: '0.95rem', fontWeight: 800 }}>Generale</h3>
-                                    <p style={{ margin: 0, fontSize: '0.75rem', opacity: 0.8, lineHeight: 1.3 }}>Bellezza vegetale assoluta</p>
-                                  </div>
-
-                                  {/* Mini Preview Classifica */}
-                                  <div style={{ display: 'flex', alignItems: 'center', marginTop: 10 }}>
-                                    {leaderboard.slice(0, 3).map((u, i) => (
-                                      <div key={i} style={{
-                                        width: 24, height: 24,
-                                        borderRadius: '50%',
-                                        background: activeLeaderboardType === 'beauty_contest' ? 'white' : '#eee',
-                                        border: '2px solid white',
-                                        marginLeft: i > 0 ? -8 : 0,
-                                        fontSize: '0.6rem',
-                                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                        fontWeight: 800,
-                                        color: activeLeaderboardType === 'beauty_contest' ? 'var(--primary)' : '#666'
-                                      }}>
-                                        {u.username.charAt(0).toUpperCase()}
-                                      </div>
-                                    ))}
-                                    {leaderboard.length > 3 && <div style={{ marginLeft: 6, fontSize: '0.7rem', fontWeight: 700, opacity: 0.8 }}>+{leaderboard.length - 3}</div>}
-                                  </div>
-                                </div>
-
-                                {/* Card 2: Sfida Settimanale */}
-                                <div
-                                  onClick={() => { setActiveLeaderboardType(weeklyChallenge.id); fetchLeaderboard(false, weeklyChallenge.id); }}
-                                  style={{
-                                    background: activeLeaderboardType !== 'beauty_contest'
-                                      ? 'linear-gradient(135deg, #FF9800, #F57C00)'
-                                      : 'var(--white)',
-                                    color: activeLeaderboardType !== 'beauty_contest' ? 'white' : 'var(--dark)',
-                                    padding: 16,
-                                    borderRadius: 24,
-                                    border: `2px solid ${activeLeaderboardType !== 'beauty_contest' ? 'transparent' : 'var(--card-border)'}`,
-                                    cursor: 'pointer',
-                                    transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-                                    boxShadow: activeLeaderboardType !== 'beauty_contest' ? '0 8px 20px rgba(245, 124, 0, 0.3)' : 'none',
-                                    transform: activeLeaderboardType !== 'beauty_contest' ? 'scale(1.02)' : 'scale(1)',
-                                    position: 'relative',
-                                    overflow: 'hidden',
-                                    height: 160,
-                                    display: 'flex',
-                                    flexDirection: 'column',
-                                    justifyContent: 'space-between'
-                                  }}
-                                >
-                                  {activeLeaderboardType !== 'beauty_contest' && <Star size={80} style={{ position: 'absolute', top: -20, right: -20, opacity: 0.1 }} />}
-
-                                  <div>
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                                      <div style={{
-                                        background: activeLeaderboardType !== 'beauty_contest' ? 'rgba(255,255,255,0.2)' : '#FFF3E0',
-                                        padding: 8,
-                                        borderRadius: 12,
-                                        color: activeLeaderboardType !== 'beauty_contest' ? 'white' : '#F57C00'
-                                      }}>
-                                        <Star size={20} />
-                                      </div>
-                                      {(() => {
-                                        const myRank = weeklyLeaderboard.findIndex(u => u.username === username);
-                                        return myRank !== -1 ? <div style={{ background: activeLeaderboardType !== 'beauty_contest' ? 'white' : '#F57C00', color: activeLeaderboardType !== 'beauty_contest' ? '#F57C00' : 'white', padding: '4px 8px', borderRadius: 8, fontSize: '0.7rem', fontWeight: 800 }}>#{myRank + 1}</div> : null;
-                                      })()}
-                                    </div>
-                                    <h3 style={{ margin: '12px 0 4px', fontSize: '0.95rem', fontWeight: 800 }}>Settimanale</h3>
-                                    <p style={{ margin: 0, fontSize: '0.75rem', opacity: 0.8, lineHeight: 1.3 }}>{weeklyChallenge.requirement}</p>
-                                  </div>
-
-                                  {/* Mini Preview Classifica */}
-                                  <div style={{ display: 'flex', alignItems: 'center', marginTop: 10 }}>
-                                    {weeklyLeaderboard.slice(0, 3).map((u, i) => (
-                                      <div key={i} style={{
-                                        width: 24, height: 24,
-                                        borderRadius: '50%',
-                                        background: activeLeaderboardType !== 'beauty_contest' ? 'white' : '#eee',
-                                        border: '2px solid white',
-                                        marginLeft: i > 0 ? -8 : 0,
-                                        fontSize: '0.6rem',
-                                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                        fontWeight: 800,
-                                        color: activeLeaderboardType !== 'beauty_contest' ? '#F57C00' : '#666'
-                                      }}>
-                                        {u.username.charAt(0).toUpperCase()}
-                                      </div>
-                                    ))}
-                                    {weeklyLeaderboard.length > 3 && <div style={{ marginLeft: 6, fontSize: '0.7rem', fontWeight: 700, opacity: 0.8 }}>+{weeklyLeaderboard.length - 3}</div>}
-                                  </div>
-                                </div>
+                      {/* Azioni Checklist */}
+                      <div style={{ marginBottom: 20 }}>
+                        <h4 style={{ fontSize: '0.85rem', marginBottom: 12, opacity: 0.9, letterSpacing: '1px' }}>AZIONI DA COMPLETARE</h4>
+                        {activeCareProgram.currentPhase?.actions?.map((action: any, idx: number) => (
+                          <div key={idx} style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 12,
+                            padding: 14,
+                            background: 'rgba(255,255,255,0.1)',
+                            backdropFilter: 'blur(10px)',
+                            borderRadius: 16,
+                            marginBottom: 10,
+                            border: '1px solid rgba(255,255,255,0.15)'
+                          }}>
+                            <div style={{ fontSize: '1.4rem' }}>
+                              {action.type === 'water' ? '💧' :
+                                action.type === 'fertilize' ? '🌱' :
+                                  action.type === 'prune' ? '✂️' :
+                                    action.type === 'photo_check' ? '📸' : '✅'}
+                            </div>
+                            <div style={{ flex: 1 }}>
+                              <div style={{ fontSize: '0.9rem', fontWeight: 700 }}>{action.title}</div>
+                              <div style={{ fontSize: '0.75rem', opacity: 0.8 }}>
+                                {action.frequency === 'daily' ? 'Quotidiano' :
+                                  action.frequency === 'weekly' ? 'Settimanale' :
+                                    action.frequency === 'every_2_days' ? 'Ogni 2 giorni' :
+                                      action.frequency === 'every_3_days' ? 'Ogni 3 giorni' : 'Al bisogno'}
                               </div>
-
-                              <h3 style={{ marginTop: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
-                                {activeLeaderboardType === 'beauty_contest' ? <Award size={20} color="var(--primary)" /> : <Star size={20} color="#F57C00" />}
-                                {activeLeaderboardType === 'beauty_contest' ? 'Classifica Generale' : weeklyChallenge.title}
-                              </h3>
-
-                              {(activeLeaderboardType === 'beauty_contest' ? leaderboard : weeklyLeaderboard).length === 0 ? <p style={{ opacity: 0.5, textAlign: 'center', margin: '40px 0' }}>Nessun campione ancora...</p> : (activeLeaderboardType === 'beauty_contest' ? leaderboard : weeklyLeaderboard).map((entry: any, idx) => {
-                                if (!entry) return null;
-                                const isTop3 = idx < 3;
-                                const bg = idx === 0 ? 'linear-gradient(135deg, #FFF9C4 0%, #FFFDE7 100%)' :
-                                  idx === 1 ? 'linear-gradient(135deg, #F5F5F5 0%, #FAFAFA 100%)' :
-                                    idx === 2 ? 'linear-gradient(135deg, #EFEBE9 0%, #FBE9E7 100%)' : 'white';
-
-                                return (
-                                  <div key={idx} onClick={() => setSelectedEntry(entry)} style={{
-                                    display: 'flex',
-                                    justifyContent: 'space-between',
-                                    padding: '12px 16px',
-                                    background: bg,
-                                    borderRadius: 16,
-                                    marginBottom: 4,
-                                    border: '1px solid var(--card-border)',
-                                    cursor: 'pointer',
-                                    alignItems: 'center'
-                                  }}>
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                                      <div style={{ fontWeight: 800, fontSize: '1.1rem', minWidth: 28, textAlign: 'center' }}>
-                                        {idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : `#${idx + 1}`}
-                                      </div>
-                                      {(entry.image_url || entry.image) && <img src={entry.image_url || entry.image} style={{ width: 36, height: 36, borderRadius: 8, objectFit: 'cover' }} />}
-                                      <div>
-                                        <div style={{ fontWeight: 700, fontSize: '0.9rem', color: entry.username === username ? 'var(--primary)' : 'var(--dark)' }}>{entry.username || 'Anonimo'}</div>
-                                        <div style={{ fontSize: '0.7rem', opacity: 0.5 }}>{entry.score} PT</div>
-                                      </div>
-                                    </div>
-                                    <ChevronRight size={16} opacity={0.3} />
-                                  </div>
-                                );
-                              })}
+                            </div>
+                            <div style={{ fontSize: '0.8rem', fontWeight: 700, opacity: 0.7 }}>
+                              {action.completed || 0}/{action.total}
                             </div>
                           </div>
-                          <button onClick={() => { setActiveGame(null); setBeautyScore(null); setQuestPhoto(null); }} style={{ width: '100%', marginTop: 20, background: 'var(--primary)', color: 'white', border: 'none', padding: '16px', borderRadius: 100, fontWeight: 800, cursor: 'pointer' }}>CHIUDI</button>
+                        ))}
+                      </div>
 
-                          {selectedEntry && (
-                            <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', zIndex: 300, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }} onClick={() => setSelectedEntry(null)}>
-                              <div style={{ background: 'white', borderRadius: 24, padding: 20, maxWidth: 350, width: '100%', textAlign: 'center', position: 'relative' }} onClick={e => e.stopPropagation()}>
-                                <button onClick={() => setSelectedEntry(null)} style={{ position: 'absolute', top: 10, right: 10, background: '#eee', border: 'none', borderRadius: '50%', width: 30, height: 30, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><X size={15} /></button>
-                                <img src={selectedEntry.image_url || selectedEntry.image} style={{ width: '100%', borderRadius: 16, marginBottom: 16, maxHeight: '50vh', objectFit: 'contain', background: '#f5f5f5' }} />
-                                <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 10, marginBottom: 4 }}>
-                                  <h2 style={{ color: 'var(--primary)', margin: 0, fontSize: '2.5rem' }}>{selectedEntry.score}</h2>
-                                  <span style={{ fontSize: '1rem', opacity: 0.5, fontWeight: 700 }}>/ 100</span>
-                                </div>
-                                <div style={{ margin: '0 0 20px', fontWeight: 800, fontSize: '1.2rem' }}>{selectedEntry.username || 'Anonimo'}</div>
-                                <div style={{ fontSize: '0.85rem', opacity: 0.6, marginBottom: 20 }}>Scattata il {new Date(selectedEntry.created_at || selectedEntry.timestamp || Date.now()).toLocaleDateString()}</div>
-
-                                {selectedEntry.username === username && (
-                                  <button onClick={async (e) => {
-                                    e.stopPropagation();
-                                    if (confirm('Vuoi davvero cancellare questo risultato?')) {
-                                      await deleteLeaderboardEntry(username!);
-                                      const leaderboardResult = await getLeaderboard('all', 100);
-                                      if (leaderboardResult.success && Array.isArray(leaderboardResult.leaderboard)) {
-                                        setLeaderboard(leaderboardResult.leaderboard);
-                                      }
-                                      setSelectedEntry(null);
-                                      setAchievementToast('Risultato rimosso 🗑️');
-                                    }
-                                  }} style={{ width: '100%', padding: 14, background: '#fee', color: '#c00', border: 'none', borderRadius: 16, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
-                                    <Trash2 size={18} /> ELIMINA RISULTATO
-                                  </button>
-                                )}
-                              </div>
-                            </div>
-                          )}
-                        </>
-                      )}
-                    </div>
-                  ) : activeGame ? (
-                    <div style={{ padding: '20px' }}>
-                      {questPhoto && <img src={questPhoto} style={{ width: '100%', borderRadius: 20, marginBottom: 20, maxHeight: 200, objectFit: 'cover' }} />}
-                      <div style={{ background: 'var(--white)', borderRadius: 24, padding: 24, marginBottom: 20, border: '1px solid var(--card-border)' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 20 }}>
-                          <div style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-muted)' }}>Domanda {currentQuestion + 1}/{(() => {
-                            const qId = QUESTS.find(q => q.id === activeGame)?.id;
-                            if (qId === 'general_quiz_2') return QUIZ_QUESTIONS_2.length;
-                            if (qId === 'general_quiz_3') return QUIZ_QUESTIONS_3.length;
-                            return (QUESTS.find(q => q.id === activeGame)?.type === 'quiz' ? QUIZ_QUESTIONS : questQuestions).length;
-                          })()}</div>
-                          <div style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--primary)' }}>Punteggio: {gameScore}</div>
+                      {/* Prossimo Checkpoint */}
+                      {activeCareProgram.nextCheckpoint && (
+                        <div style={{
+                          background: 'rgba(255, 215, 0, 0.2)',
+                          backdropFilter: 'blur(10px)',
+                          padding: 16,
+                          borderRadius: 16,
+                          marginBottom: 16,
+                          border: '2px dashed rgba(255, 215, 0, 0.5)'
+                        }}>
+                          <div style={{ fontSize: '0.85rem', fontWeight: 700, marginBottom: 4 }}>
+                            📅 PROSSIMO CHECK FOTOGRAFICO
+                          </div>
+                          <div style={{ fontSize: '0.8rem', opacity: 0.9 }}>
+                            {new Date(activeCareProgram.nextCheckpoint.scheduled_date).toLocaleDateString('it-IT', {
+                              day: 'numeric',
+                              month: 'long',
+                              year: 'numeric'
+                            })}
+                          </div>
                         </div>
-                        <h3 style={{ fontSize: '1.1rem', lineHeight: 1.4, marginBottom: 24 }}>
-                          {(() => {
-                            const qId = QUESTS.find(q => q.id === activeGame)?.id;
-                            if (qId === 'general_quiz_2') return QUIZ_QUESTIONS_2[currentQuestion]?.q;
-                            if (qId === 'general_quiz_3') return QUIZ_QUESTIONS_3[currentQuestion]?.q;
-                            return (QUESTS.find(q => q.id === activeGame)?.type === 'quiz'
-                              ? QUIZ_QUESTIONS[currentQuestion]?.q
-                              : questQuestions[currentQuestion]?.question);
-                          })()}
-                        </h3>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                          {((() => {
-                            const qId = QUESTS.find(q => q.id === activeGame)?.id;
-                            if (qId === 'general_quiz_2') return QUIZ_QUESTIONS_2[currentQuestion]?.answers;
-                            if (qId === 'general_quiz_3') return QUIZ_QUESTIONS_3[currentQuestion]?.answers;
-                            return (QUESTS.find(q => q.id === activeGame)?.type === 'quiz'
-                              ? QUIZ_QUESTIONS[currentQuestion]?.answers
-                              : questQuestions[currentQuestion]?.options || []);
-                          })()).map((ans: string, idx: number) => (
-                            <button
-                              key={idx}
-                              onClick={() => !showResult && answerQuestion(idx)}
-                              disabled={showResult}
-                              style={{
-                                padding: '20px 24px', // Increased padding
-                                fontSize: '1.1rem', // Increased font size
-                                borderRadius: 20,
-                                border: showResult && idx === (activeGame === 'general_quiz_2' ? QUIZ_QUESTIONS_2[currentQuestion].correct : activeGame === 'general_quiz_3' ? QUIZ_QUESTIONS_3[currentQuestion].correct : (QUESTS.find(q => q.id === activeGame)?.type === 'quiz' ? QUIZ_QUESTIONS[currentQuestion].correct : questQuestions[currentQuestion].correct)) ? '3px solid var(--primary)' : showResult && idx === selectedAnswer ? '3px solid var(--danger)' : '1px solid var(--card-border)',
-                                background: showResult && idx === (activeGame === 'general_quiz_2' ? QUIZ_QUESTIONS_2[currentQuestion].correct : activeGame === 'general_quiz_3' ? QUIZ_QUESTIONS_3[currentQuestion].correct : (QUESTS.find(q => q.id === activeGame)?.type === 'quiz' ? QUIZ_QUESTIONS[currentQuestion].correct : questQuestions[currentQuestion].correct)) ? '#E8F5E9' : showResult && idx === selectedAnswer ? '#FFEBEE' : 'var(--white)',
-                                color: showResult && idx === (activeGame === 'general_quiz_2' ? QUIZ_QUESTIONS_2[currentQuestion].correct : activeGame === 'general_quiz_3' ? QUIZ_QUESTIONS_3[currentQuestion].correct : (QUESTS.find(q => q.id === activeGame)?.type === 'quiz' ? QUIZ_QUESTIONS[currentQuestion].correct : questQuestions[currentQuestion].correct)) ? 'var(--primary-dark)' : 'var(--dark)',
-                                fontWeight: 800,
-                                cursor: showResult ? 'default' : 'pointer',
-                                textAlign: 'center', // Center text
-                                transition: 'all 0.2s',
-                                width: '100%',
-                                boxShadow: '0 4px 12px rgba(0,0,0,0.05)'
-                              }}
-                            >
-                              {ans}
-                            </button>
-                          ))}
+                      )}
+
+                      {/* Bottone Check Foto */}
+                      <button
+                        onClick={() => {
+                          setIsCheckpointMode(true);
+                          setCurrentCheckpoint(activeCareProgram.nextCheckpoint);
+                          setActiveMode('scan');
+                          setIsCameraOn(true);
+                        }}
+                        style={{
+                          width: '100%',
+                          background: 'linear-gradient(135deg, #FFD700 0%, #FFA500 100%)',
+                          color: '#333',
+                          border: 'none',
+                          padding: '18px',
+                          borderRadius: 100,
+                          fontWeight: 900,
+                          fontSize: '1.05rem',
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: 12,
+                          boxShadow: '0 6px 20px rgba(255, 215, 0, 0.4)',
+                          transition: 'transform 0.2s',
+                          textTransform: 'uppercase',
+                          letterSpacing: '1px'
+                        }}
+                        onMouseDown={(e) => e.currentTarget.style.transform = 'scale(0.95)'}
+                        onMouseUp={(e) => e.currentTarget.style.transform = 'scale(1)'}
+                      >
+                        <Camera size={22} /> FAI CHECK FOTO
+                      </button>
+
+                      {/* Statistiche */}
+                      <div style={{
+                        marginTop: 24,
+                        padding: 20,
+                        background: 'rgba(255,255,255,0.1)',
+                        backdropFilter: 'blur(10px)',
+                        borderRadius: 20,
+                        display: 'grid',
+                        gridTemplateColumns: '1fr 1fr 1fr',
+                        gap: 16,
+                        textAlign: 'center',
+                        border: '1px solid rgba(255,255,255,0.15)'
+                      }}>
+                        <div>
+                          <div style={{ fontSize: '1.6rem', fontWeight: 900, color: '#FFD700' }}>
+                            {activeCareProgram.stats?.healthImprovement > 0 ? '+' : ''}{activeCareProgram.stats?.healthImprovement || 0}%
+                          </div>
+                          <div style={{ fontSize: '0.7rem', opacity: 0.8, marginTop: 4 }}>Salute</div>
+                        </div>
+                        <div>
+                          <div style={{ fontSize: '1.6rem', fontWeight: 900, color: '#FFD700' }}>
+                            {activeCareProgram.stats?.completedCheckpoints || 0}/{activeCareProgram.stats?.totalCheckpoints || 0}
+                          </div>
+                          <div style={{ fontSize: '0.7rem', opacity: 0.8, marginTop: 4 }}>Checkpoint</div>
+                        </div>
+                        <div>
+                          <div style={{ fontSize: '1.6rem', fontWeight: 900, color: '#FFD700' }}>
+                            {activeCareProgram.stats?.daysActive || 0}
+                          </div>
+                          <div style={{ fontSize: '0.7rem', opacity: 0.8, marginTop: 4 }}>Giorni</div>
                         </div>
                       </div>
-                      {currentQuestion === (QUESTS.find(q => q.id === activeGame)?.type === 'quiz' ? QUIZ_QUESTIONS : questQuestions).length - 1 && showResult && (
-                        <div style={{ textAlign: 'center', padding: 20, background: 'var(--primary-light)', borderRadius: 24, border: '1px solid var(--primary)' }}>
-                          <Trophy size={48} color="var(--primary)" style={{ margin: '0 auto 12px' }} />
-                          <h3 style={{ margin: 0, color: 'var(--primary)' }}>Quiz Completato!</h3>
-                          <p style={{ fontSize: '0.9rem', opacity: 0.8, margin: '8px 0' }}>Hai risposto correttamente a {gameScore}/{(() => {
-                            const qId = QUESTS.find(q => q.id === activeGame)?.id;
-                            if (qId === 'general_quiz_2') return QUIZ_QUESTIONS_2.length;
-                            if (qId === 'general_quiz_3') return QUIZ_QUESTIONS_3.length;
-                            return (QUESTS.find(q => q.id === activeGame)?.type === 'quiz' ? QUIZ_QUESTIONS : questQuestions).length;
-                          })()} domande</p>
-                          <p style={{ fontWeight: 800, color: 'var(--primary)', fontSize: '1.2rem', margin: 0 }}>+{gameScore * 10} XP</p>
-                        </div>
-                      )}
+
                     </div>
                   ) : (
+                    // Nessun Programma - Mostra Pulsante Avvio
+                    <div style={{
+                      padding: 32,
+                      background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                      borderRadius: 24,
+                      boxShadow: '0 10px 40px rgba(102, 126, 234, 0.3)',
+                      textAlign: 'center',
+                      color: 'white'
+                    }}>
+                      <div style={{ fontSize: '4rem', marginBottom: 16 }}>🌱</div>
+                      <h3 style={{ marginTop: 0, marginBottom: 12, fontSize: '1.4rem', fontWeight: 900 }}>
+                        Programma di Cura Personalizzato
+                      </h3>
+                      <p style={{ opacity: 0.9, fontSize: '0.95rem', lineHeight: 1.6, marginBottom: 24, maxWidth: '400px', margin: '0 auto 24px' }}>
+                        Avvia un programma di cura guidato con checkpoint fotografici, luxometro integrato e tracking del progresso.
+                      </p>
+                      <button
+                        onClick={async () => {
+                          if (!username || !fullScreenAnalysis) return;
+
+                          setAchievementToast('📸 Scatta una foto iniziale per iniziare...');
+                          setIsCheckpointMode(true);
+                          setActiveMode('scan');
+                          setIsCameraOn(true);
+                        }}
+                        style={{
+                          background: 'linear-gradient(135deg, #FFD700 0%, #FFA500 100%)',
+                          color: '#333',
+                          border: 'none',
+                          padding: '16px 32px',
+                          borderRadius: 100,
+                          fontWeight: 900,
+                          cursor: 'pointer',
+                          fontSize: '1rem',
+                          boxShadow: '0 6px 20px rgba(255, 215, 0, 0.4)',
+                          textTransform: 'uppercase',
+                          letterSpacing: '1px'
+                        }}
+                      >
+                        🚀 AVVIA PROGRAMMA DI RECUPERO
+                      </button>
+                    </div>
+                  )}
+
+
+
+                  {/* Storico Recente */}
+                  <div style={{ padding: 20, background: 'var(--white)', borderRadius: 28, border: '1px solid var(--card-border)' }}>
+                    <h3 style={{ marginTop: 0, fontSize: '1rem', display: 'flex', alignItems: 'center', gap: 8 }}><History size={18} color="var(--primary)" /> Storico Cure</h3>
+                    {isLoadingHistory ? <div className="spin" style={{ margin: '20px auto' }} /> : (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                        {careHistory.length === 0 ? <p style={{ opacity: 0.5, fontSize: '0.85rem' }}>Nessuna azione registrata.</p> : careHistory.slice(0, 5).map((ev: any) => (
+                          <div key={ev.id} style={{ display: 'flex', alignItems: 'center', gap: 12, paddingBottom: 8, borderBottom: '1px solid #f5f5f5' }}>
+                            <div style={{ width: 8, height: 8, borderRadius: '50%', background: ev.event_type === 'watering' ? '#1976D2' : '#7B1FA2' }} />
+                            <div style={{ flex: 1 }}>
+                              <div style={{ fontWeight: 700, fontSize: '0.85rem' }}>{ev.event_type === 'watering' ? 'Irrigazione' : 'Controllo'}</div>
+                              <div style={{ fontSize: '0.7rem', opacity: 0.5 }}>{new Date(ev.created_at).toLocaleString()}</div>
+                            </div>
+                            <button
+                              onClick={async (e) => {
+                                e.stopPropagation();
+                                if (confirm("Vuoi eliminare questa registrazione?")) {
+                                  await deleteCareEvent(ev.id);
+                                  const res = await fetchCareEvents(fullScreenAnalysis.id);
+                                  if (res.success) setCareHistory(res.data);
+                                }
+                              }}
+                              style={{ background: 'transparent', border: 'none', color: 'var(--danger)', padding: 4, cursor: 'pointer', opacity: 0.6 }}
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                // Tab History
+                <div style={{ padding: 20, background: 'var(--white)', borderRadius: 28, border: '1px solid var(--card-border)' }}>
+                  <h3 style={{ marginTop: 0, fontSize: '1rem', display: 'flex', alignItems: 'center', gap: 8 }}><History size={18} color="var(--primary)" /> Evoluzione Pianta</h3>
+                  <p style={{ fontSize: '0.75rem', opacity: 0.6, marginBottom: 16 }}>Diario fotografico per monitorare la crescita e la salute nel tempo.</p>
+
+                  {isLoadingPhotos ? <div className="loader-box"><div className="spin" /></div> : (
                     <>
-                      {!username && (
-                        <div style={{
-                          background: 'linear-gradient(135deg, #FF6B6B, #FF8E53)',
-                          padding: '16px',
-                          borderRadius: '12px',
-                          marginBottom: '16px',
-                          color: 'white',
-                        }}>
-                          <h3 style={{ margin: '0 0 8px 0', fontSize: '16px', fontWeight: '600' }}>
-                            🎮 Sfide Bloccate
-                          </h3>
-                          <p style={{ margin: '0 0 12px 0', fontSize: '14px', opacity: 0.9 }}>
-                            Accedi per partecipare alle sfide multiplayer e competere nella classifica globale!
-                          </p>
-                          <button
-                            onClick={() => setShowAuthModal(true)}
+                      <div className="photo-archive-grid">
+                        {plantPhotos.length === 0 ? (
+                          <div style={{ gridColumn: '1/-1', textAlign: 'center', padding: '20px 0', opacity: 0.4 }}>
+                            <CameraOff size={32} style={{ marginBottom: 8 }} />
+                            <p style={{ fontSize: '0.8rem' }}>Nessuna foto salvata.<br />Usa "CHECK FOTO" per iniziare l'album!</p>
+                          </div>
+                        ) : plantPhotos.map((p: any) => (
+                          <div
+                            key={p.id}
+                            className="photo-archive-item"
+                            onClick={() => setSelectedPhotoId(selectedPhotoId === p.id ? null : p.id)}
                             style={{
-                              background: 'white',
-                              color: '#FF6B6B',
-                              border: 'none',
-                              padding: '10px 20px',
-                              borderRadius: '8px',
-                              fontWeight: '600',
-                              cursor: 'pointer',
+                              position: 'relative',
+                              border: selectedPhotoId === p.id ? '3px solid var(--primary)' : 'none',
+                              transform: selectedPhotoId === p.id ? 'scale(0.95)' : 'scale(1)',
+                              transition: 'all 0.2s',
+                              zIndex: selectedPhotoId === p.id ? 10 : 1
                             }}
                           >
-                            ACCEDI ORA
+                            <img src={p.photo_url} alt="Crescita" style={{ opacity: selectedPhotoId === p.id ? 0.8 : 1 }} />
+                            <div className="photo-archive-date">{new Date(p.taken_at).toLocaleDateString()}</div>
+                            {selectedPhotoId === p.id && (
+                              <div style={{ position: 'absolute', top: 8, right: 8, background: 'var(--primary)', color: 'white', borderRadius: '50%', width: 24, height: 24, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                <CheckCircle2 size={16} />
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+
+                      {selectedPhotoId && (
+                        <div style={{ marginTop: 16, display: 'flex', gap: 12, animation: 'fadeIn 0.3s ease-out' }}>
+                          <button
+                            onClick={() => {
+                              const photo = plantPhotos.find(p => p.id === selectedPhotoId);
+                              if (photo) window.open(photo.photo_url, '_blank');
+                            }}
+                            style={{ flex: 1, padding: 14, borderRadius: 16, border: 'none', background: 'var(--primary-light)', color: 'var(--primary-dark)', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}
+                          >
+                            <Maximize2 size={18} /> APRI
+                          </button>
+                          <button
+                            onClick={() => {
+                              showDeleteConfirmation("Vuoi eliminare questa foto?", async () => {
+                                setAchievementToast('Eliminazione foto in corso... ⏳');
+                                const res = await deletePlantPhoto(selectedPhotoId);
+                                if (res.success) {
+                                  setAchievementToast('Foto eliminata correttamente 🗑️');
+                                  setPlantPhotos(prev => prev.filter(p => p.id !== selectedPhotoId));
+                                  setSelectedPhotoId(null);
+                                  setTimeout(() => setAchievementToast(null), 3000);
+                                } else {
+                                  setAchievementToast('Errore eliminazione foto ❌');
+                                  setTimeout(() => setAchievementToast(null), 3000);
+                                }
+                              });
+                            }}
+                            style={{ flex: 1, padding: 14, borderRadius: 16, border: 'none', background: '#fee', color: '#c00', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}
+                          >
+                            <Trash2 size={18} /> ELIMINA
                           </button>
                         </div>
                       )}
-                      <div style={{ padding: '20px 10px', display: 'flex', flexDirection: 'column', gap: 24 }}>
-                        <div style={{ background: 'linear-gradient(135deg, var(--primary), var(--primary-dark))', borderRadius: 28, padding: 24, color: 'white', position: 'relative', overflow: 'hidden', boxShadow: '0 10px 25px rgba(46, 125, 50, 0.2)' }}>
-                          <div style={{ position: 'absolute', top: -20, right: -20, opacity: 0.1 }}><Award size={150} color="white" /></div>
+                    </>
+                  )}
+                </div>
+              )}
 
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 16, position: 'relative', zIndex: 1 }}>
-                            <div style={{ width: 80, height: 80, borderRadius: '50%', background: 'rgba(255,255,255,0.2)', border: '4px solid rgba(255,255,255,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '2rem', fontWeight: 900 }}>
-                              {level}
-                            </div>
-                            <div style={{ flex: 1 }}>
-                              <div style={{ opacity: 0.8, fontSize: '0.75rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: 1 }}>Livello Attuale</div>
-                              <h2 style={{ margin: '4px 0', fontSize: '1.4rem', fontWeight: 900 }}>
-                                {level >= 21 ? 'LEGGENDA VIVENTE' :
-                                  level >= 13 ? 'MAESTRO ERBORISTA' :
-                                    level >= 8 ? 'CUSTODE VERDE' :
-                                      level >= 4 ? 'ESPLORATORE NATURA' : 'APPRENDISTA BOTANICO'}
-                              </h2>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: 4, opacity: 0.9, fontSize: '0.85rem' }}>
-                                <Zap size={14} fill="currentColor" /> {xp % 1000} / 1000 XP per il liv. {level + 1}
-                              </div>
-                            </div>
-                          </div>
+              {fullScreenAnalysis.source === 'garden' ? (
+                <>
+                  <div style={{ marginTop: 24, display: 'grid', gridTemplateColumns: detailTab === 'info' ? '1fr 1fr' : '1fr', gap: 10 }}>
+                    {detailTab === 'info' && (
+                      <button className="btn-game-action" style={{ background: 'var(--primary-dark)', color: 'white', padding: 16, borderRadius: 16, border: 'none', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }} onClick={() => setDetailTab('care')}>
+                        <Calendar size={18} /> GESTISCI CURA
+                      </button>
+                    )}
+                    <button className="btn-game-action" style={{ background: '#e0f7fa', color: '#006064', padding: 16, borderRadius: 16, border: 'none', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }} onClick={async () => {
+                      if (!username || !fullScreenAnalysis?.id) return;
+                      const nextDate = new Date();
+                      nextDate.setDate(nextDate.getDate() + 1); // Notifica domani di default
+                      await updateUserPlant(username, fullScreenAnalysis.id, { next_check_at: nextDate.toISOString() });
 
-                          <div style={{ marginTop: 20, height: 8, background: 'rgba(255,255,255,0.15)', borderRadius: 100, overflow: 'hidden' }}>
-                            <div style={{ height: '100%', background: 'white', width: `${((xp % 1000) / 1000) * 100}%`, borderRadius: 100, boxShadow: '0 0 10px white' }}></div>
-                          </div>
+                      const freshPlants = await fetchUserPlants(username);
+                      if (freshPlants.success) setUserPlants(freshPlants.data);
+
+                      setAchievementToast('🔔 Notifiche attivate! Ti avviserò domani per il controllo.');
+                      setTimeout(() => setAchievementToast(null), 3000);
+                    }}>
+                      <Bell size={18} /> NOTIFICAMI
+                    </button>
+                  </div>
+
+                  <div style={{ marginTop: 12 }}>
+                    <button className="btn-game-action" style={{ width: '100%', background: '#fee', color: '#c00', padding: 16, borderRadius: 16, border: 'none', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }} onClick={() => setShowDeleteConfirm(true)}>
+                      <Trash2 size={18} /> RIMOVI DAL GIARDINO
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <button className="btn-game-action" style={{ marginTop: 24, width: '100%', background: 'var(--primary)', color: 'white', padding: 18, borderRadius: 20, border: 'none', fontWeight: 800, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }} onClick={() => { setFullScreenAnalysis(null); setActiveMode('chat'); sendMessage(`Qual è la cura migliore per questa ${fullScreenAnalysis.name}?`); }}>
+                  <MessageSquare size={20} /> CHIEDI AIUTO AI
+                </button>
+              )}
+            </div>
+
+            {
+              showDeleteConfirm && (
+                <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center', zIndex: 100 }}>
+                  <div style={{ background: 'white', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, width: '100%', animation: 'slideUp 0.3s ease-out' }}>
+                    <h3 style={{ marginTop: 0, textAlign: 'center', color: 'var(--danger)' }}>Eliminare Pianta?</h3>
+                    <p style={{ textAlign: 'center', opacity: 0.7, marginBottom: 24 }}>Questa azione non può essere annullata.</p>
+                    <div style={{ display: 'flex', gap: 12 }}>
+                      <button onClick={() => setShowDeleteConfirm(false)} style={{ flex: 1, padding: 16, borderRadius: 16, border: 'none', background: '#f5f5f5', fontWeight: 700, fontSize: '1rem', cursor: 'pointer' }}>ANNULLA</button>
+                      <button onClick={async () => {
+                        if (username && fullScreenAnalysis?.id) {
+                          const resDel = await deleteUserPlant(username, fullScreenAnalysis.id);
+                          if (resDel.success) {
+                            setAchievementToast('Pianta rimossa dal giardino 🗑️');
+                            setTimeout(() => setAchievementToast(null), 3000);
+                            setFullScreenAnalysis(null);
+                            setShowDeleteConfirm(false);
+                            // Refresh
+                            const res = await fetchUserPlants(username);
+                            if (res.success) setUserPlants(res.data);
+                          } else {
+                            alert("Errore eliminazione: " + (resDel.error || 'Sconosciuto'));
+                          }
+                        }
+                      }} style={{ flex: 1, padding: 16, borderRadius: 16, border: 'none', background: '#fee', color: '#c00', fontWeight: 700, fontSize: '1rem', cursor: 'pointer' }}>ELIMINA</button>
+                    </div>
+                  </div>
+                </div>
+              )
+            }
+          </div >
+        )
+      }
+
+      <canvas ref={canvasRef} style={{ display: 'none' }} />
+
+      {/* Add To Garden Confirm Modal */}
+      {
+        showAddToGardenConfirm && pendingPlant && (
+          <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', zIndex: 400, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+            <div style={{ background: 'white', borderRadius: 24, padding: 24, maxWidth: 350, width: '100%', textAlign: 'center' }}>
+              <div style={{ textAlign: 'center', marginBottom: 24 }}>
+                <div style={{ width: 80, height: 80, borderRadius: '50%', background: '#e0f2f1', color: 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px', fontSize: '2rem', fontWeight: 800 }}>
+                  {username ? username.charAt(0).toUpperCase() : <User size={40} />}
+                </div>
+                <h2 style={{ margin: 0, color: 'var(--dark)' }}>{username || 'Ospite'}</h2>
+                <div style={{ opacity: 0.6 }}>Livello {level} • {xp} XP</div>
+              </div>
+              <h3 style={{ margin: '0 0 8px', fontSize: '1.4rem', color: 'var(--primary)' }}>Aggiungi al Giardino?</h3>
+              <p style={{ opacity: 0.7, margin: '0 0 24px', lineHeight: 1.5 }}>
+                Vuoi salvare <b>{pendingPlant.name}</b> nel tuo giardino virtuale per monitorarne la salute?
+              </p>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                <button
+                  onClick={async () => {
+                    const btn = document.getElementById('btn-confirm-add');
+                    if (btn) { btn.innerHTML = '⏳ Salvataggio...'; (btn as HTMLButtonElement).disabled = true; }
+
+                    try {
+                      const { addUserPlant } = await import('./apiClient');
+                      const res = await addUserPlant(username!, {
+                        plant_name: pendingPlant.name,
+                        scientific_name: pendingPlant.scientificName,
+                        imageBase64: pendingPlant.image,
+                        diagnosis: pendingPlant.diagnosis
+                      });
+
+                      if (res.success) {
+                        setAchievementToast('Pianta aggiunta al giardino! 🌱');
+                        setTimeout(() => setAchievementToast(null), 3000);
+                        setShowAddToGardenConfirm(false);
+                        setPendingPlant(null);
+                        // Refresh plants if we are in garden mode
+                        if (activeMode === 'garden') {
+                          const plantsRes = await fetchUserPlants(username!);
+                          if (plantsRes.success) setUserPlants(plantsRes.data);
+                        }
+                      } else {
+                        alert('Errore salvataggio: ' + (res.error || 'Sconosciuto'));
+                        if (btn) { btn.innerHTML = 'SÌ, AGGIUNGI'; (btn as HTMLButtonElement).disabled = false; }
+                      }
+                    } catch (e) {
+                      alert('Errore invio dati.');
+                      if (btn) { btn.innerHTML = 'SÌ, AGGIUNGI'; (btn as HTMLButtonElement).disabled = false; }
+                    }
+                  }}
+                  id="btn-confirm-add"
+                  style={{ width: '100%', background: 'var(--primary)', color: 'white', border: 'none', padding: '16px', borderRadius: 100, fontWeight: 800, cursor: 'pointer', fontSize: '1rem' }}
+                >
+                  SÌ, AGGIUNGI ORA
+                </button>
+                <button
+                  onClick={() => { setShowAddToGardenConfirm(false); setPendingPlant(null); }}
+                  style={{ width: '100%', background: 'transparent', color: 'var(--text-muted)', border: 'none', padding: '12px', cursor: 'pointer', fontWeight: 700 }}
+                >
+                  No, grazie
+                </button>
+              </div>
+            </div>
+          </div>
+        )
+      }
+
+      {/* Toast Notifiche Premium */}
+      {
+        achievementToast && (
+          <div className="achievement-toast">
+            <div style={{ background: 'rgba(255,255,255,0.2)', padding: 8, borderRadius: 12 }}><Sparkles size={20} /></div>
+            <span>{achievementToast}</span>
+          </div>
+        )
+      }
+
+      {
+        isLeaderboardOpen && (
+          <div className="side-overlay" style={{ zIndex: 450 }}>
+            {/* Banner Header Integrato */}
+            {/* Banner Header Integrato (Uniformato) */}
+            <div style={{
+              background: 'linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%)',
+              padding: '24px 20px 28px',
+              position: 'relative',
+              boxShadow: '0 4px 20px rgba(0,0,0,0.15)',
+              overflow: 'hidden',
+              borderBottomLeftRadius: 32,
+              borderBottomRightRadius: 32,
+              flexShrink: 0
+            }}>
+              <Sprout size={140} style={{ position: 'absolute', right: -20, top: -20, opacity: 0.1, color: 'white', transform: 'rotate(15deg)' }} />
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: 16, position: 'relative', zIndex: 1 }}>
+                <button
+                  className="btn-header-icon"
+                  onClick={() => setIsLeaderboardOpen(false)}
+                  style={{
+                    background: 'rgba(255,255,255,0.2)',
+                    color: 'white',
+                    border: 'none',
+                    width: 40,
+                    height: 40,
+                    borderRadius: 12,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    cursor: 'pointer'
+                  }}>
+                  <ChevronLeft size={24} />
+                </button>
+
+                <div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <Trophy size={24} color="white" fill="white" fillOpacity={0.3} />
+                    <h2 style={{ margin: 0, color: 'white', fontSize: '1.5rem', fontWeight: 800, textShadow: '0 2px 4px rgba(0,0,0,0.1)' }}>Classifica Globale</h2>
+                  </div>
+                  <div style={{ color: 'rgba(255,255,255,0.85)', fontSize: '0.85rem', marginTop: 4, fontWeight: 500 }}>I migliori BioExpert della settimana</div>
+                </div>
+              </div>
+            </div>
+            <div className="overlay-content" style={{ padding: 0 }}>
+              {/* Banner Premi Dinamico */}
+              <div style={{
+                background: activeLeaderboardType === 'beauty_contest' ? 'linear-gradient(135deg, var(--primary), var(--primary-dark))' : 'linear-gradient(135deg, #FFD700, #FFA000)',
+                margin: '16px',
+                borderRadius: '24px',
+                padding: '20px',
+                color: 'white',
+                position: 'relative',
+                overflow: 'hidden',
+                boxShadow: activeLeaderboardType === 'beauty_contest' ? '0 8px 20px rgba(46, 125, 50, 0.3)' : '0 8px 20px rgba(255, 160, 0, 0.3)'
+              }}>
+                <Trophy size={80} style={{ position: 'absolute', right: -10, bottom: -10, opacity: 0.2, transform: 'rotate(15deg)' }} />
+                <div style={{ position: 'relative', zIndex: 1 }}>
+                  <h4 style={{ margin: '0 0 8px', fontSize: '1.2rem', fontWeight: 900 }}>
+                    {activeLeaderboardType === 'beauty_contest' ? '🏆 PREMI DEL MESE' : '🏆 PREMI DELLA SETTIMANA'}
+                  </h4>
+                  <div style={{ fontSize: '0.85rem', lineHeight: 1.5, opacity: 0.95 }}>
+                    {activeLeaderboardType === 'beauty_contest'
+                      ? "I migliori curatori del mese riceveranno il badge 'Pollice Verde' e sconti esclusivi!"
+                      : "I primi 3 classificati riceveranno XP bonus e semi digitali rari per il proprio giardino!"}
+                  </div>
+                  <div style={{ display: 'flex', gap: 12, marginTop: 12 }}>
+                    {activeLeaderboardType === 'beauty_contest' ? (
+                      <>
+                        <div style={{ background: 'rgba(255,255,255,0.2)', padding: '4px 10px', borderRadius: 100, fontSize: '0.7rem', fontWeight: 800 }}>🥇 1000 XP</div>
+                        <div style={{ background: 'rgba(255,255,255,0.2)', padding: '4px 10px', borderRadius: 100, fontSize: '0.7rem', fontWeight: 800 }}>🥈 Badge Raro</div>
+                      </>
+                    ) : (
+                      <>
+                        <div style={{ background: 'rgba(255,255,255,0.2)', padding: '4px 10px', borderRadius: 100, fontSize: '0.7rem', fontWeight: 800 }}>🥇 500 XP</div>
+                        <div style={{ background: 'rgba(255,255,255,0.2)', padding: '4px 10px', borderRadius: 100, fontSize: '0.7rem', fontWeight: 800 }}>🥈 300 XP</div>
+                        <div style={{ background: 'rgba(255,255,255,0.2)', padding: '4px 10px', borderRadius: 100, fontSize: '0.7rem', fontWeight: 800 }}>🥉 150 XP</div>
+                      </>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              <div style={{ padding: '0 16px 24px' }}>
+                {/* NEW DOUBLE CARD SELECTOR */}
+                <div style={{ marginBottom: 24, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                  {/* Card 1: Concorso Globale */}
+                  <div
+                    onClick={() => { setActiveLeaderboardType('beauty_contest'); fetchLeaderboard(); }}
+                    style={{
+                      background: activeLeaderboardType === 'beauty_contest'
+                        ? 'linear-gradient(135deg, var(--primary), var(--primary-dark))'
+                        : 'var(--white)',
+                      color: activeLeaderboardType === 'beauty_contest' ? 'white' : 'var(--dark)',
+                      padding: 16,
+                      borderRadius: 24,
+                      border: `2px solid ${activeLeaderboardType === 'beauty_contest' ? 'transparent' : 'var(--card-border)'}`,
+                      cursor: 'pointer',
+                      transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                      boxShadow: activeLeaderboardType === 'beauty_contest' ? '0 8px 20px rgba(46, 125, 50, 0.3)' : 'none',
+                      transform: activeLeaderboardType === 'beauty_contest' ? 'scale(1.02)' : 'scale(1)',
+                      position: 'relative',
+                      overflow: 'hidden',
+                      height: 160,
+                      display: 'flex',
+                      flexDirection: 'column',
+                      justifyContent: 'space-between'
+                    }}
+                  >
+                    {activeLeaderboardType === 'beauty_contest' && <Sparkles size={80} style={{ position: 'absolute', top: -20, right: -20, opacity: 0.1 }} />}
+
+                    <div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                        <div style={{
+                          background: activeLeaderboardType === 'beauty_contest' ? 'rgba(255,255,255,0.2)' : 'var(--primary-light)',
+                          padding: 8,
+                          borderRadius: 12,
+                          color: activeLeaderboardType === 'beauty_contest' ? 'white' : 'var(--primary)'
+                        }}>
+                          <Award size={20} />
                         </div>
-
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                          <div style={{ background: 'var(--white)', padding: 20, borderRadius: 24, border: '1px solid var(--card-border)', textAlign: 'center' }}>
-                            <div style={{ fontSize: '1.8rem', fontWeight: 900, color: 'var(--primary)' }}>{completedQuests.length}</div>
-                            <div style={{ fontSize: '0.7rem', opacity: 0.6, fontWeight: 700, textTransform: 'uppercase' }}>Sfide Completate</div>
-                          </div>
-                          <div style={{ background: 'var(--white)', padding: 20, borderRadius: 24, border: '1px solid var(--card-border)', textAlign: 'center' }}>
-                            <div style={{ fontSize: '1.8rem', fontWeight: 900, color: '#FFD700' }}>
-                              {level >= 21 ? '🥇' : level >= 13 ? '🥈' : level >= 8 ? '🥉' : '🌱'}
-                            </div>
-                            <div style={{ fontSize: '0.7rem', opacity: 0.6, fontWeight: 700, textTransform: 'uppercase' }}>Rango Attuale</div>
-                          </div>
-                        </div>
+                        {(() => {
+                          const myRank = leaderboard.findIndex(u => u.username === username);
+                          return myRank !== -1 ? <div style={{ background: activeLeaderboardType === 'beauty_contest' ? 'white' : 'var(--primary)', color: activeLeaderboardType === 'beauty_contest' ? 'var(--primary)' : 'white', padding: '4px 8px', borderRadius: 8, fontSize: '0.7rem', fontWeight: 800 }}>#{myRank + 1}</div> : null;
+                        })()}
                       </div>
-                      {QUESTS.map(q => {
-                        const done = completedQuests.includes(q.id);
-                        const progress = questProgress[q.id] || 0;
-                        const isMultiplayer = q.type === 'beauty';
-                        const isQuiz = q.type === 'quiz';
+                      <h3 style={{ margin: '12px 0 4px', fontSize: '0.95rem', fontWeight: 800 }}>Generale</h3>
+                      <p style={{ margin: 0, fontSize: '0.75rem', opacity: 0.8, lineHeight: 1.3 }}>Bellezza vegetale assoluta</p>
+                    </div>
+
+                    {/* Mini Preview Classifica */}
+                    <div style={{ display: 'flex', alignItems: 'center', marginTop: 10 }}>
+                      {leaderboard.slice(0, 3).map((u, i) => (
+                        <div key={i} style={{
+                          width: 24, height: 24,
+                          borderRadius: '50%',
+                          background: activeLeaderboardType === 'beauty_contest' ? 'white' : '#eee',
+                          border: '2px solid white',
+                          marginLeft: i > 0 ? -8 : 0,
+                          fontSize: '0.6rem',
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          fontWeight: 800,
+                          color: activeLeaderboardType === 'beauty_contest' ? 'var(--primary)' : '#666'
+                        }}>
+                          {u.username.charAt(0).toUpperCase()}
+                        </div>
+                      ))}
+                      {leaderboard.length > 3 && <div style={{ marginLeft: 6, fontSize: '0.7rem', fontWeight: 700, opacity: 0.8 }}>+{leaderboard.length - 3}</div>}
+                    </div>
+                  </div>
+
+                  {/* Card 2: Sfida Settimanale */}
+                  <div
+                    onClick={() => { setActiveLeaderboardType(weeklyChallenge.id); fetchLeaderboard(false, weeklyChallenge.id); }}
+                    style={{
+                      background: activeLeaderboardType !== 'beauty_contest'
+                        ? 'linear-gradient(135deg, #FF9800, #F57C00)'
+                        : 'var(--white)',
+                      color: activeLeaderboardType !== 'beauty_contest' ? 'white' : 'var(--dark)',
+                      padding: 16,
+                      borderRadius: 24,
+                      border: `2px solid ${activeLeaderboardType !== 'beauty_contest' ? 'transparent' : 'var(--card-border)'}`,
+                      cursor: 'pointer',
+                      transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                      boxShadow: activeLeaderboardType !== 'beauty_contest' ? '0 8px 20px rgba(245, 124, 0, 0.3)' : 'none',
+                      transform: activeLeaderboardType !== 'beauty_contest' ? 'scale(1.02)' : 'scale(1)',
+                      position: 'relative',
+                      overflow: 'hidden',
+                      height: 160,
+                      display: 'flex',
+                      flexDirection: 'column',
+                      justifyContent: 'space-between'
+                    }}
+                  >
+                    {activeLeaderboardType !== 'beauty_contest' && <Star size={80} style={{ position: 'absolute', top: -20, right: -20, opacity: 0.1 }} />}
+
+                    <div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                        <div style={{
+                          background: activeLeaderboardType !== 'beauty_contest' ? 'rgba(255,255,255,0.2)' : '#FFF3E0',
+                          padding: 8,
+                          borderRadius: 12,
+                          color: activeLeaderboardType !== 'beauty_contest' ? 'white' : '#F57C00'
+                        }}>
+                          <Star size={20} />
+                        </div>
+                        {(() => {
+                          const myRank = weeklyLeaderboard.findIndex(u => u.username === username);
+                          return myRank !== -1 ? <div style={{ background: activeLeaderboardType !== 'beauty_contest' ? 'white' : '#F57C00', color: activeLeaderboardType !== 'beauty_contest' ? '#F57C00' : 'white', padding: '4px 8px', borderRadius: 8, fontSize: '0.7rem', fontWeight: 800 }}>#{myRank + 1}</div> : null;
+                        })()}
+                      </div>
+                      <h3 style={{ margin: '12px 0 4px', fontSize: '0.95rem', fontWeight: 800 }}>Settimanale</h3>
+                      <p style={{ margin: 0, fontSize: '0.75rem', opacity: 0.8, lineHeight: 1.3 }}>{weeklyChallenge.requirement}</p>
+                    </div>
+
+                    {/* Mini Preview Classifica */}
+                    <div style={{ display: 'flex', alignItems: 'center', marginTop: 10 }}>
+                      {weeklyLeaderboard.slice(0, 3).map((u, i) => (
+                        <div key={i} style={{
+                          width: 24, height: 24,
+                          borderRadius: '50%',
+                          background: activeLeaderboardType !== 'beauty_contest' ? 'white' : '#eee',
+                          border: '2px solid white',
+                          marginLeft: i > 0 ? -8 : 0,
+                          fontSize: '0.6rem',
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          fontWeight: 800,
+                          color: activeLeaderboardType !== 'beauty_contest' ? '#F57C00' : '#666'
+                        }}>
+                          {u.username.charAt(0).toUpperCase()}
+                        </div>
+                      ))}
+                      {weeklyLeaderboard.length > 3 && <div style={{ marginLeft: 6, fontSize: '0.7rem', fontWeight: 700, opacity: 0.8 }}>+{weeklyLeaderboard.length - 3}</div>}
+                    </div>
+                  </div>
+                </div>
+
+                <h3 style={{ marginTop: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
+                  {activeLeaderboardType === 'beauty_contest' ? <Award size={20} color="var(--primary)" /> : <Star size={20} color="#F57C00" />}
+                  {activeLeaderboardType === 'beauty_contest' ? 'Classifica Generale' : weeklyChallenge.title}
+                </h3>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  {!(activeLeaderboardType === 'beauty_contest' ? leaderboard : weeklyLeaderboard).length && (activeLeaderboardType === 'beauty_contest' ? leaderboard : weeklyLeaderboard).length === 0 ? (
+                    <div style={{ textAlign: 'center', padding: 40, opacity: 0.5 }}>
+                      <p>Nessun campione ancora...</p>
+                    </div>
+                  ) : (
+                    <>
+                      {(activeLeaderboardType === 'beauty_contest' ? leaderboard : weeklyLeaderboard).map((entry: any, idx) => {
+                        if (!entry) return null;
+                        const isTop3 = idx < 3;
+                        const bg = idx === 0 ? 'linear-gradient(135deg, #FFF9C4 0%, #FFFDE7 100%)' :
+                          idx === 1 ? 'linear-gradient(135deg, #F5F5F5 0%, #FAFAFA 100%)' :
+                            idx === 2 ? 'linear-gradient(135deg, #EFEBE9 0%, #FBE9E7 100%)' : 'white';
+                        const border = idx === 0 ? '2px solid #FFD700' :
+                          idx === 1 ? '2px solid #C0C0C0' :
+                            idx === 2 ? '2px solid #CD7F32' : '1px solid var(--card-border)';
+
                         return (
-                          <div key={q.id} className="quest-card" style={{ opacity: done ? 0.6 : 1, border: isMultiplayer ? '2px solid #FFD700' : isQuiz ? '2px solid #9C27B0' : done ? '2px solid var(--primary)' : '1px solid var(--card-border)', background: isMultiplayer ? 'linear-gradient(135deg, rgba(255, 215, 0, 0.1), rgba(255, 215, 0, 0.05))' : isQuiz ? 'linear-gradient(135deg, rgba(156, 39, 176, 0.1), rgba(156, 39, 176, 0.05))' : 'var(--white)' }}>
-                            <div className="quest-icon" style={{ background: done ? 'var(--primary-light)' : isMultiplayer ? 'rgba(255, 215, 0, 0.2)' : isQuiz ? 'rgba(156, 39, 176, 0.2)' : '' }}>{done ? <CheckCircle2 size={24} color="var(--primary)" /> : q.icon}</div>
-                            <div style={{ flex: 1 }}>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                                <div style={{ fontWeight: 800 }}>{q.title}</div>
-                                {isMultiplayer && <div style={{ background: '#FFD700', color: 'white', padding: '2px 8px', borderRadius: 100, fontSize: '0.65rem', fontWeight: 800 }}>MULTIPLAYER</div>}
-                                {isQuiz && <div style={{ background: '#9C27B0', color: 'white', padding: '2px 8px', borderRadius: 100, fontSize: '0.65rem', fontWeight: 800 }}>QUIZ</div>}
-                              </div>
-                              <div style={{ fontSize: '0.75rem', opacity: 0.6 }}>{q.desc}</div>
-                              {q.count && progress > 0 && !done && <div style={{ fontSize: '0.7rem', color: 'var(--primary)', fontWeight: 700, marginTop: 4 }}>Progresso: {progress}/{q.count}</div>}
+                          <div key={idx} onClick={() => setSelectedEntry(entry)} style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 12,
+                            padding: isTop3 ? '16px' : '12px 16px',
+                            background: bg,
+                            borderRadius: 20,
+                            border: border,
+                            boxShadow: isTop3 ? '0 4px 15px rgba(0,0,0,0.05)' : 'none',
+                            cursor: 'pointer'
+                          }}>
+                            <div style={{
+                              width: 32,
+                              height: 32,
+                              borderRadius: '50%',
+                              background: isTop3 ? 'white' : 'transparent',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              fontWeight: 900,
+                              fontSize: isTop3 ? '1.2rem' : '0.9rem',
+                              color: isTop3 ? 'var(--dark)' : 'var(--text-muted)'
+                            }}>
+                              {idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : idx + 1}
                             </div>
-                            {!done && <button onClick={() => startGame(q.id)} style={{ background: isMultiplayer ? '#FFD700' : isQuiz ? '#9C27B0' : 'var(--primary)', color: 'white', border: 'none', padding: '8px 16px', borderRadius: 100, fontWeight: 800, fontSize: '0.75rem', cursor: 'pointer' }}>GIOCA</button>}
-                            {done && <div style={{ fontWeight: 800, color: 'var(--primary)' }}>✓ +{q.xp} XP</div>}
+
+                            <div style={{ position: 'relative' }}>
+                              <img
+                                src={entry.image_url || entry.image || 'https://placehold.co/100x100/e8f5e9/2e7d32?text=🌿'}
+                                style={{ width: 50, height: 50, borderRadius: 12, objectFit: 'cover', border: '2px solid var(--card-border)' }}
+                                onError={(e) => { e.currentTarget.src = 'https://placehold.co/100x100/e8f5e9/2e7d32?text=🌿'; }}
+                              />
+                              {isTop3 && <div style={{ position: 'absolute', bottom: -5, right: -5, background: 'white', borderRadius: '50%', padding: 2, boxShadow: '0 2px 5px rgba(0,0,0,0.1)' }}><Award size={14} color={idx === 0 ? '#FFD700' : idx === 1 ? '#C0C0C0' : '#CD7F32'} /></div>}
+                            </div>
+
+                            <div style={{ flex: 1 }}>
+                              <div style={{ fontWeight: 800, fontSize: isTop3 ? '1rem' : '0.9rem', color: entry.username === username ? 'var(--primary)' : 'var(--dark)' }}>
+                                {entry.username || 'Anonimo'} {entry.username === username && '(Tu)'}
+                              </div>
+                              {entry.plant_name && <div style={{ fontSize: '0.75rem', fontWeight: 700, fontStyle: 'italic', color: 'var(--primary)', marginBottom: 2 }}>{entry.plant_name}</div>}
+                              <div style={{ fontSize: '0.7rem', opacity: 0.5 }}>{new Date(entry.created_at || entry.timestamp).toLocaleDateString()}</div>
+                            </div>
+
+                            <div style={{ textAlign: 'right' }}>
+                              <div style={{ fontWeight: 900, color: 'var(--primary)', fontSize: '1.1rem' }}>{entry.score}</div>
+                              <div style={{ fontSize: '0.6rem', fontWeight: 700, opacity: 0.4 }}>PUNTI AI</div>
+                            </div>
                           </div>
                         );
                       })}
@@ -4319,1089 +5617,152 @@ function App() {
                   )}
                 </div>
               </div>
-            )
-          }
-
-          {
-            isSettingsOpen && (
-              <div className="side-overlay">
-                {/* Banner Header Integrato - Impostazioni */}
-                {/* Banner Header Integrato - Impostazioni (Uniformato) */}
-                <div style={{
-                  background: 'linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%)',
-                  padding: '24px 20px 28px',
-                  position: 'relative',
-                  boxShadow: '0 4px 20px rgba(0,0,0,0.15)',
-                  overflow: 'hidden',
-                  borderBottomLeftRadius: 32,
-                  borderBottomRightRadius: 32,
-                  flexShrink: 0
-                }}>
-                  <Sprout size={140} style={{ position: 'absolute', right: -20, top: -20, opacity: 0.1, color: 'white', transform: 'rotate(15deg)' }} />
-
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 16, position: 'relative', zIndex: 1 }}>
-                    <button
-                      className="btn-header-icon"
-                      onClick={() => setIsSettingsOpen(false)}
-                      style={{
-                        background: 'rgba(255,255,255,0.2)',
-                        color: 'white',
-                        border: 'none',
-                        width: 40,
-                        height: 40,
-                        borderRadius: 12,
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        cursor: 'pointer'
-                      }}>
-                      <ChevronLeft size={24} />
-                    </button>
-
-                    <div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                        <User size={24} color="white" fill="white" fillOpacity={0.3} />
-                        <h2 style={{ margin: 0, color: 'white', fontSize: '1.5rem', fontWeight: 800, textShadow: '0 2px 4px rgba(0,0,0,0.1)' }}>Impostazioni</h2>
-                      </div>
-                      <div style={{ color: 'rgba(255,255,255,0.85)', fontSize: '0.85rem', marginTop: 4, fontWeight: 500 }}>Personalizza la tua esperienza</div>
-                    </div>
-                  </div>
-                </div>
-                <div className="overlay-content">
-                  <div className="profile-card">
-                    <div className="profile-avatar"><User size={32} /></div>
-                    <div>
-                      <div style={{ fontWeight: 800, fontSize: '1.2rem' }}>
-                        {username || 'Ospite'}
-                      </div>
-                      <div style={{ fontSize: '0.85rem', opacity: 0.9 }}>
-                        {username ? 'Utente Registrato' : `Livello ${level} • Non registrato`}
-                      </div>
-                    </div>
-                  </div>
-
-                  {!username ? (
-                    <button
-                      onClick={() => setShowAuthModal(true)}
-                      style={{
-                        width: '100%',
-                        padding: '16px',
-                        background: 'var(--primary)',
-                        color: 'white',
-                        border: 'none',
-                        borderRadius: '12px',
-                        fontSize: '16px',
-                        fontWeight: '600',
-                        cursor: 'pointer',
-                        marginBottom: '24px',
-                      }}
-                    >
-                      ACCEDI O REGISTRATI
-                    </button>
-                  ) : (
-                    <button
-                      onClick={async () => {
-                        clearLocalUsername();
-                        setUsername(null);
-                        alert('Logout effettuato!');
-                      }}
-                      style={{
-                        width: '100%',
-                        padding: '16px',
-                        background: '#fee',
-                        color: '#c00',
-                        border: 'none',
-                        borderRadius: '12px',
-                        fontSize: '16px',
-                        fontWeight: '600',
-                        cursor: 'pointer',
-                        marginBottom: '24px',
-                      }}
-                    >
-                      <LogOut size={20} style={{ marginRight: '8px', display: 'inline' }} />
-                      Esci
-                    </button>
-                  )}
-
-                  <div className="settings-section">
-                    <div className="settings-section-title">DevTools</div>
-                    <div className="devtools-card">
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                        <div className="settings-icon-box" style={{ background: 'var(--primary-dark)', color: 'white' }}><Code size={18} /></div>
-                        <div style={{ fontWeight: 800, fontSize: '0.9rem' }}>BY CASTRO MASSIMO</div>
-                      </div>
-                      <p style={{ fontSize: '0.85rem', lineHeight: 1.5, margin: 0, opacity: 0.8 }}>
-                        Questa App è realizzata da <b>DevTools by Castro Massimo</b>. Se hai bisogno di supporto, segnalazioni o di WebApp personalizzate contattaci.
-                      </p>
-                      <a href="mailto:castromassimo@gmail.com" className="btn-contact">
-                        <Mail size={18} /> CONTATTACI VIA E-MAIL
-                      </a>
-                    </div>
-                  </div>
-
-
-
-                  <div className="settings-section">
-                    <div className="settings-section-title">Preferenze App</div>
-                    <div className="settings-group">
-                      <div className="settings-row" onClick={() => setDarkMode(!darkMode)}>
-                        <div className="settings-icon-box"><Moon size={18} /></div>
-                        <span style={{ flex: 1, fontWeight: 600 }}>Modalità Scura</span>
-                        <div className={`toggle-switch ${darkMode ? 'active' : ''}`}></div>
-                      </div>
-                      <div className="settings-row" onClick={async () => {
-                        if (!notificationsEnabled) {
-                          // Abilita: richiedi permessi
-                          if ('Notification' in window) {
-                            const permission = await Notification.requestPermission();
-                            if (permission === 'granted') {
-                              setNotificationsEnabled(true);
-                              setAchievementToast('✅ Notifiche attivate! Riceverai promemoria per le tue piante.');
-                              setTimeout(() => setAchievementToast(null), 3000);
-                              // Registra SW
-                              if ('serviceWorker' in navigator) {
-                                registerServiceWorker();
-                              }
-                            } else {
-                              alert('⚠️ Permesso negato. Abilita le notifiche dalle impostazioni del browser.');
-                            }
-                          } else {
-                            alert('❌ Il tuo browser non supporta le notifiche.');
-                          }
-                        } else {
-                          // Disabilita
-                          setNotificationsEnabled(false);
-                          setAchievementToast('🔕 Notifiche disattivate.');
-                          setTimeout(() => setAchievementToast(null), 3000);
-                        }
-                      }}>
-                        <div className="settings-icon-box"><Bell size={18} /></div>
-                        <span style={{ flex: 1, fontWeight: 600 }}>Notifiche Cura</span>
-                        <div className={`toggle-switch ${notificationsEnabled ? 'active' : ''}`}></div>
-                      </div>
-                    </div>
-                  </div>
-
-                  {username && (
-                    <div className="settings-section">
-                      <div className="settings-section-title">Account</div>
-                      <div className="settings-group">
-                        <div className="settings-row" onClick={() => {
-                          const newUsername = prompt("Inserisci nuovo nome utente:", username);
-                          if (newUsername) {
-                            setUsername(newUsername);
-                            setLocalUsername(newUsername);
-                            alert("Nome utente aggiornato!");
-                          }
-                        }}>
-                          <div className="settings-icon-box"><User size={18} /></div>
-                          <span style={{ flex: 1, fontWeight: 600 }}>Modifica Nome Utente</span>
-                          <ChevronRight size={16} opacity={0.3} />
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  <div className="settings-section">
-                    <div className="settings-section-title">Sicurezza & Dati</div>
-                    <div className="settings-group">
-                      <div className="settings-row" onClick={() => (window as any).aistudio && (window as any).aistudio.openSelectKey()}>
-                        <div className="settings-icon-box"><Key size={18} /></div>
-                        <span style={{ flex: 1, fontWeight: 600 }}>Configura API Key</span>
-                        <ExternalLink size={16} opacity={0.3} />
-                      </div>
-                      <div className="settings-row" onClick={() => setIsPrivacyOpen(true)}>
-                        <div className="settings-icon-box"><ShieldCheck size={18} /></div>
-                        <span style={{ flex: 1, fontWeight: 600 }}>Privacy e Sicurezza</span>
-                        <ChevronRight size={16} opacity={0.3} />
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Privacy Modal */}
-                  {isPrivacyOpen && (
-                    <div className="side-overlay" style={{ zIndex: 600 }}>
-                      <div style={{
-                        background: 'var(--white)',
-                        height: '100%',
-                        display: 'flex',
-                        flexDirection: 'column'
-                      }}>
-                        <div style={{
-                          padding: '20px',
-                          borderBottom: '1px solid var(--card-border)',
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: 16
-                        }}>
-                          <button onClick={() => setIsPrivacyOpen(false)} style={{ background: 'none', border: 'none', padding: 4, cursor: 'pointer' }}>
-                            <ChevronLeft size={24} color="var(--dark)" />
-                          </button>
-                          <h2 style={{ margin: 0, fontSize: '1.2rem' }}>Privacy & Termini</h2>
-                        </div>
-
-                        <div style={{ padding: '24px', overflowY: 'auto', flex: 1 }}>
-                          <section style={{ marginBottom: 32 }}>
-                            <h3 style={{ color: 'var(--primary)', display: 'flex', alignItems: 'center', gap: 8 }}>
-                              <ShieldCheck size={20} /> Informativa Privacy
-                            </h3>
-                            <p style={{ fontSize: '0.9rem', lineHeight: 1.6, opacity: 0.8 }}>
-                              Ultimo aggiornamento: Gennaio 2026
-                            </p>
-                            <p style={{ fontSize: '0.95rem', lineHeight: 1.6 }}>
-                              La tua privacy è fondamentale per noi. BioExpert è progettata per minimizzare la raccolta di dati personali.
-                            </p>
-
-                            <h4 style={{ marginTop: 20, marginBottom: 8 }}>1. Raccolta Dati</h4>
-                            <p style={{ fontSize: '0.9rem', lineHeight: 1.6, opacity: 0.8 }}>
-                              BioExpert raccoglie solo i dati strettamente necessari al funzionamento dell'app:
-                              <ul style={{ paddingLeft: 20, marginTop: 8 }}>
-                                <li><b>Foto delle piante:</b> Vengono analizzate dall'AI e salvate solo se esplicitamente richiesto (es. Classifiche).</li>
-                                <li><b>Dati di gioco (XP, Livello):</b> Salvati localmente e sincronizzati per le classifiche.</li>
-                                <li><b>Local Storage:</b> Utilizziamo la memoria del tuo dispositivo per salvare preferenze e progressi.</li>
-                              </ul>
-                            </p>
-
-                            <h4 style={{ marginTop: 20, marginBottom: 8 }}>2. Trattamento Immagini AI</h4>
-                            <p style={{ fontSize: '0.9rem', lineHeight: 1.6, opacity: 0.8 }}>
-                              Le immagini caricate per l'analisi o le sfide vengono processate da Google Gemini AI. Non conserviamo le immagini sui nostri server in modo permanente salvo per le "Classifiche" pubbliche, dove l'immagine è visibile agli altri utenti.
-                            </p>
-                          </section>
-
-                          <section style={{ marginBottom: 32 }}>
-                            <h3 style={{ color: 'var(--primary)', display: 'flex', alignItems: 'center', gap: 8 }}>
-                              <FileText size={20} /> Termini di Servizio
-                            </h3>
-
-                            <h4 style={{ marginTop: 20, marginBottom: 8 }}>1. Utilizzo dell'App</h4>
-                            <p style={{ fontSize: '0.9rem', lineHeight: 1.6, opacity: 0.8 }}>
-                              L'uso di BioExpert è consentito per scopi personali, educativi e ludici. È vietato caricare contenuti offensivi, appropriati, o che violino copyright altrui.
-                            </p>
-
-                            <h4 style={{ marginTop: 20, marginBottom: 8 }}>2. Avvertenza AI (Disclaimer)</h4>
-                            <p style={{ fontSize: '0.9rem', lineHeight: 1.6, opacity: 0.8, background: '#FFF3E0', padding: 12, borderRadius: 12, borderLeft: '4px solid #FFB74D' }}>
-                              <b>IMPORTANTE:</b> I consigli, le diagnosi e le identificazioni fornite dall'Intelligenza Artificiale sono a scopo puramente informativo e ludico. Non sostituiscono il parere professionale di un botanico o agronomo. Non usare per funghi commestibili o piante medicinali con scopi di salute.
-                            </p>
-
-                            <h4 style={{ marginTop: 20, marginBottom: 8 }}>3. Condotta Classifiche</h4>
-                            <p style={{ fontSize: '0.9rem', lineHeight: 1.6, opacity: 0.8 }}>
-                              Ci riserviamo il diritto di rimuovere dalla classifica e bannare utenti che caricano foto non pertinenti (spam), false o inappropriate, grazie ai nostri sistemi di validazione AI automatici.
-                            </p>
-                          </section>
-
-                          <div style={{ textAlign: 'center', marginTop: 40, opacity: 0.5, fontSize: '0.8rem' }}>
-                            BioExpert © 2026 - Tutti i diritti riservati<br />
-                            Sviluppato da Castro Massimo
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  <div className="settings-section">
-                    <div className="settings-section-title">Sistema</div>
-                    <div className="settings-group">
-                      <div className="settings-row" style={{ color: 'var(--danger)' }} onClick={() => {
-                        showDeleteConfirmation("Cancellare tutti i dati e resettare l'app?", () => {
-                          localStorage.clear();
-                          window.location.reload();
-                        });
-                      }}>
-                        <div className="settings-icon-box" style={{ background: '#FFF0F0', color: 'var(--danger)' }}><Trash2 size={18} /></div>
-                        <span style={{ flex: 1, fontWeight: 600 }}>Resetta Applicazione</span>
-                      </div>
-                      <div className="settings-row" onClick={() => alert("BioExpert v1.2.0")}>
-                        <div className="settings-icon-box"><Info size={18} /></div>
-                        <span style={{ flex: 1, fontWeight: 600 }}>Versione App</span>
-                        <span style={{ fontSize: '0.8rem', opacity: 0.4 }}>1.2.0</span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )
-          }
-
-          {
-            fullScreenAnalysis && (
-              <div className="side-overlay">
-                {/* Banner Header Integrato - Dettaglio Pianta */}
-                <div style={{
-                  background: 'linear-gradient(135deg, var(--primary), #4CAF50)',
-                  padding: '20px 16px 24px',
-                  boxShadow: '0 4px 12px rgba(0,0,0,0.1)'
-                }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 8 }}>
-                    <button
-                      className="btn-header-icon"
-                      onClick={() => { setFullScreenAnalysis(null); setDetailTab('info'); }}
-                      style={{ background: 'rgba(255,255,255,0.3)', color: 'white' }}
-                    >
-                      <ChevronLeft size={24} />
-                    </button>
-                    <h2 style={{
-                      margin: 0,
-                      color: 'white',
-                      fontSize: '1.5rem',
-                      fontWeight: 900,
-                      textShadow: '0 2px 4px rgba(0,0,0,0.2)',
-                      flex: 1
-                    }}>
-                      🌿 {fullScreenAnalysis.name || 'Dettaglio Pianta'}
-                    </h2>
-                  </div>
-                  <div style={{ fontSize: '0.85rem', color: 'rgba(255,255,255,0.9)', fontWeight: 600 }}>
-                    {fullScreenAnalysis.scientificName || 'Informazioni e cura'}
-                  </div>
-                </div>
-                <div className="overlay-content" style={{ paddingBottom: 100 }}>
-                  <img src={fullScreenAnalysis.image || 'https://placehold.co/600x400?text=No+Image'} style={{ width: '100%', borderRadius: 32, marginBottom: 16, boxShadow: '0 10px 30px rgba(0,0,0,0.1)', minHeight: 200, objectFit: 'cover', background: '#f0f0f0' }} onError={(e) => (e.currentTarget.src = 'https://placehold.co/600x400?text=No+Image')} />
-
-                  {fullScreenAnalysis.source === 'garden' && (
-                    <div style={{ display: 'flex', background: 'var(--primary-light)', padding: 4, borderRadius: 16, marginBottom: 20 }}>
-                      <button onClick={() => setDetailTab('info')} style={{ flex: 1, padding: '10px', borderRadius: 12, border: 'none', background: detailTab === 'info' ? 'var(--primary)' : 'transparent', color: detailTab === 'info' ? 'white' : 'var(--primary)', fontWeight: 700, cursor: 'pointer', fontSize: '0.75rem' }}>INFO</button>
-                      <button onClick={() => setDetailTab('care')} style={{ flex: 1, padding: '10px', borderRadius: 12, border: 'none', background: detailTab === 'care' ? 'var(--primary)' : 'transparent', color: detailTab === 'care' ? 'white' : 'var(--primary)', fontWeight: 700, cursor: 'pointer', fontSize: '0.75rem' }}>CURA</button>
-                      <button onClick={() => setDetailTab('history')} style={{ flex: 1, padding: '10px', borderRadius: 12, border: 'none', background: detailTab === 'history' ? 'var(--primary)' : 'transparent', color: detailTab === 'history' ? 'white' : 'var(--primary)', fontWeight: 700, cursor: 'pointer', fontSize: '0.75rem' }}>ALBUM</button>
-                    </div>
-                  )}
-
-                  {detailTab === 'info' ? (
-                    <>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                        <div>
-                          <h2 style={{ margin: 0, fontSize: '1.8rem' }}>{fullScreenAnalysis.name}</h2>
-                          <p style={{ opacity: 0.6, fontStyle: 'italic', marginTop: 4 }}>{fullScreenAnalysis.scientificName}</p>
-                        </div>
-                        <div className={`status-badge ${fullScreenAnalysis.healthStatus === 'healthy' ? 'status-healthy' : 'status-sick'}`}>
-                          {fullScreenAnalysis.healthStatus === 'healthy' ? 'Sana' : 'Malata'}
-                        </div>
-                      </div>
-
-                      <div style={{ padding: 20, background: 'var(--white)', borderRadius: 28, border: '1px solid var(--card-border)', marginTop: 24 }}>
-                        <h4 style={{ margin: '0 0 12px 0', display: 'flex', alignItems: 'center', gap: 8 }}><ShieldCheck size={18} color="var(--primary)" /> Diagnosi {fullScreenAnalysis.healthStatus === 'sick' ? 'e Problemi' : ''}</h4>
-                        <p style={{ fontSize: '0.95rem', lineHeight: 1.6 }}>{fullScreenAnalysis.diagnosis}</p>
-
-                        <h4 style={{ margin: '24px 0 12px 0', display: 'flex', alignItems: 'center', gap: 8 }}><Heart size={18} color="var(--danger)" /> Consigli Rapidi</h4>
-                        <div className="care-grid">
-                          <div className="care-item">
-                            <div className="care-item-title"><Droplets size={16} /> Irrigazione</div>
-                            <div className="care-item-desc">{fullScreenAnalysis.care.watering}</div>
-                          </div>
-                          <div className="care-item">
-                            <div className="care-item-title"><Sun size={16} /> Esposizione</div>
-                            <div className="care-item-desc">{fullScreenAnalysis.care.general}</div>
-                          </div>
-                          <div className="care-item">
-                            <div className="care-item-title"><Scissors size={16} /> Potatura</div>
-                            <div className="care-item-desc">{fullScreenAnalysis.care.pruning}</div>
-                          </div>
-                          <div className="care-item">
-                            <div className="care-item-title"><Inbox size={16} /> Rinvaso</div>
-                            <div className="care-item-desc">{fullScreenAnalysis.care.repotting}</div>
-                          </div>
-                        </div>
-                      </div>
-                    </>
-                  ) : detailTab === 'care' ? (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-
-                      {/* Sistema di Cura Progressivo - RIMOSSO */}
-
-                      {/* Storico Recente */}
-                      <div style={{ padding: 20, background: 'var(--white)', borderRadius: 28, border: '1px solid var(--card-border)' }}>
-                        <h3 style={{ marginTop: 0, fontSize: '1rem', display: 'flex', alignItems: 'center', gap: 8 }}><History size={18} color="var(--primary)" /> Storico Cure</h3>
-                        {isLoadingHistory ? <div className="spin" style={{ margin: '20px auto' }} /> : (
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                            {careHistory.length === 0 ? <p style={{ opacity: 0.5, fontSize: '0.85rem' }}>Nessuna azione registrata.</p> : careHistory.slice(0, 5).map((ev: any) => (
-                              <div key={ev.id} style={{ display: 'flex', alignItems: 'center', gap: 12, paddingBottom: 8, borderBottom: '1px solid #f5f5f5' }}>
-                                <div style={{ width: 8, height: 8, borderRadius: '50%', background: ev.event_type === 'watering' ? '#1976D2' : '#7B1FA2' }} />
-                                <div style={{ flex: 1 }}>
-                                  <div style={{ fontWeight: 700, fontSize: '0.85rem' }}>{ev.event_type === 'watering' ? 'Irrigazione' : 'Controllo'}</div>
-                                  <div style={{ fontSize: '0.7rem', opacity: 0.5 }}>{new Date(ev.created_at).toLocaleString()}</div>
-                                </div>
-                                <button
-                                  onClick={async (e) => {
-                                    e.stopPropagation();
-                                    if (confirm("Vuoi eliminare questa registrazione?")) {
-                                      await deleteCareEvent(ev.id);
-                                      const res = await fetchCareEvents(fullScreenAnalysis.id);
-                                      if (res.success) setCareHistory(res.data);
-                                    }
-                                  }}
-                                  style={{ background: 'transparent', border: 'none', color: 'var(--danger)', padding: 4, cursor: 'pointer', opacity: 0.6 }}
-                                >
-                                  <Trash2 size={14} />
-                                </button>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  ) : (
-                    // Tab History
-                    <div style={{ padding: 20, background: 'var(--white)', borderRadius: 28, border: '1px solid var(--card-border)' }}>
-                      <h3 style={{ marginTop: 0, fontSize: '1rem', display: 'flex', alignItems: 'center', gap: 8 }}><History size={18} color="var(--primary)" /> Evoluzione Pianta</h3>
-                      <p style={{ fontSize: '0.75rem', opacity: 0.6, marginBottom: 16 }}>Diario fotografico per monitorare la crescita e la salute nel tempo.</p>
-
-                      {isLoadingPhotos ? <div className="loader-box"><div className="spin" /></div> : (
-                        <>
-                          <div className="photo-archive-grid">
-                            {plantPhotos.length === 0 ? (
-                              <div style={{ gridColumn: '1/-1', textAlign: 'center', padding: '20px 0', opacity: 0.4 }}>
-                                <CameraOff size={32} style={{ marginBottom: 8 }} />
-                                <p style={{ fontSize: '0.8rem' }}>Nessuna foto salvata.<br />Usa "CHECK FOTO" per iniziare l'album!</p>
-                              </div>
-                            ) : plantPhotos.map((p: any) => (
-                              <div
-                                key={p.id}
-                                className="photo-archive-item"
-                                onClick={() => setSelectedPhotoId(selectedPhotoId === p.id ? null : p.id)}
-                                style={{
-                                  position: 'relative',
-                                  border: selectedPhotoId === p.id ? '3px solid var(--primary)' : 'none',
-                                  transform: selectedPhotoId === p.id ? 'scale(0.95)' : 'scale(1)',
-                                  transition: 'all 0.2s',
-                                  zIndex: selectedPhotoId === p.id ? 10 : 1
-                                }}
-                              >
-                                <img src={p.photo_url} alt="Crescita" style={{ opacity: selectedPhotoId === p.id ? 0.8 : 1 }} />
-                                <div className="photo-archive-date">{new Date(p.taken_at).toLocaleDateString()}</div>
-                                {selectedPhotoId === p.id && (
-                                  <div style={{ position: 'absolute', top: 8, right: 8, background: 'var(--primary)', color: 'white', borderRadius: '50%', width: 24, height: 24, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                    <CheckCircle2 size={16} />
-                                  </div>
-                                )}
-                              </div>
-                            ))}
-                          </div>
-
-                          {selectedPhotoId && (
-                            <div style={{ marginTop: 16, display: 'flex', gap: 12, animation: 'fadeIn 0.3s ease-out' }}>
-                              <button
-                                onClick={() => {
-                                  const photo = plantPhotos.find(p => p.id === selectedPhotoId);
-                                  if (photo) window.open(photo.photo_url, '_blank');
-                                }}
-                                style={{ flex: 1, padding: 14, borderRadius: 16, border: 'none', background: 'var(--primary-light)', color: 'var(--primary-dark)', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}
-                              >
-                                <Maximize2 size={18} /> APRI
-                              </button>
-                              <button
-                                onClick={() => {
-                                  showDeleteConfirmation("Vuoi eliminare questa foto?", async () => {
-                                    setAchievementToast('Eliminazione foto in corso... ⏳');
-                                    const res = await deletePlantPhoto(selectedPhotoId);
-                                    if (res.success) {
-                                      setAchievementToast('Foto eliminata correttamente 🗑️');
-                                      setPlantPhotos(prev => prev.filter(p => p.id !== selectedPhotoId));
-                                      setSelectedPhotoId(null);
-                                      setTimeout(() => setAchievementToast(null), 3000);
-                                    } else {
-                                      setAchievementToast('Errore eliminazione foto ❌');
-                                      setTimeout(() => setAchievementToast(null), 3000);
-                                    }
-                                  });
-                                }}
-                                style={{ flex: 1, padding: 14, borderRadius: 16, border: 'none', background: '#fee', color: '#c00', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}
-                              >
-                                <Trash2 size={18} /> ELIMINA
-                              </button>
-                            </div>
-                          )}
-                        </>
-                      )}
-                    </div>
-                  )}
-
-                  {fullScreenAnalysis.source === 'garden' ? (
-                    <>
-                      <div style={{ marginTop: 24, display: 'grid', gridTemplateColumns: '1fr', gap: 10 }}>
-                        {/* Pulsante GESTISCI CURA rimosso */}
-                        <button className="btn-game-action" style={{ background: '#e0f7fa', color: '#006064', padding: 16, borderRadius: 16, border: 'none', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }} onClick={async () => {
-                          if (!username || !fullScreenAnalysis?.id) return;
-                          const nextDate = new Date();
-                          nextDate.setDate(nextDate.getDate() + 1); // Notifica domani di default
-                          await updateUserPlant(username, fullScreenAnalysis.id, { next_check_at: nextDate.toISOString() });
-
-                          const freshPlants = await fetchUserPlants(username);
-                          if (freshPlants.success) setUserPlants(freshPlants.data);
-
-                          setAchievementToast('🔔 Notifiche attivate! Ti avviserò domani per il controllo.');
-                          setTimeout(() => setAchievementToast(null), 3000);
-                        }}>
-                          <Bell size={18} /> NOTIFICAMI
-                        </button>
-                      </div>
-
-                      <div style={{ marginTop: 12 }}>
-                        <button className="btn-game-action" style={{ width: '100%', background: '#fee', color: '#c00', padding: 16, borderRadius: 16, border: 'none', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }} onClick={() => setShowDeleteConfirm(true)}>
-                          <Trash2 size={18} /> RIMOVI DAL GIARDINO
-                        </button>
-                      </div>
-                    </>
-                  ) : (
-                    <button className="btn-game-action" style={{ marginTop: 24, width: '100%', background: 'var(--primary)', color: 'white', padding: 18, borderRadius: 20, border: 'none', fontWeight: 800, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }} onClick={() => { setFullScreenAnalysis(null); setActiveMode('chat'); sendMessage(`Qual è la cura migliore per questa ${fullScreenAnalysis.name}?`); }}>
-                      <MessageSquare size={20} /> CHIEDI AIUTO AI
-                    </button>
-                  )}
-                </div>
-
-                {
-                  showDeleteConfirm && (
-                    <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center', zIndex: 100 }}>
-                      <div style={{ background: 'white', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, width: '100%', animation: 'slideUp 0.3s ease-out' }}>
-                        <h3 style={{ marginTop: 0, textAlign: 'center', color: 'var(--danger)' }}>Eliminare Pianta?</h3>
-                        <p style={{ textAlign: 'center', opacity: 0.7, marginBottom: 24 }}>Questa azione non può essere annullata.</p>
-                        <div style={{ display: 'flex', gap: 12 }}>
-                          <button onClick={() => setShowDeleteConfirm(false)} style={{ flex: 1, padding: 16, borderRadius: 16, border: 'none', background: '#f5f5f5', fontWeight: 700, fontSize: '1rem', cursor: 'pointer' }}>ANNULLA</button>
-                          <button onClick={async () => {
-                            if (username && fullScreenAnalysis?.id) {
-                              const resDel = await deleteUserPlant(username, fullScreenAnalysis.id);
-                              if (resDel.success) {
-                                setAchievementToast('Pianta rimossa dal giardino 🗑️');
-                                setTimeout(() => setAchievementToast(null), 3000);
-                                setFullScreenAnalysis(null);
-                                setShowDeleteConfirm(false);
-                                // Refresh
-                                const res = await fetchUserPlants(username);
-                                if (res.success) setUserPlants(res.data);
-                              } else {
-                                alert("Errore eliminazione: " + (resDel.error || 'Sconosciuto'));
-                              }
-                            }
-                          }} style={{ flex: 1, padding: 16, borderRadius: 16, border: 'none', background: '#fee', color: '#c00', fontWeight: 700, fontSize: '1rem', cursor: 'pointer' }}>ELIMINA</button>
-                        </div>
-                      </div>
-                    </div>
-                  )
-                }
-              </div >
-            )
-          }
-
-          <canvas ref={canvasRef} style={{ display: 'none' }} />
-
-          {/* Add To Garden Confirm Modal */}
-          {
-            showAddToGardenConfirm && pendingPlant && (
-              <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', zIndex: 400, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
-                <div style={{ background: 'white', borderRadius: 24, padding: 24, maxWidth: 350, width: '100%', textAlign: 'center' }}>
-                  <div style={{ textAlign: 'center', marginBottom: 24 }}>
-                    <div style={{ width: 80, height: 80, borderRadius: '50%', background: '#e0f2f1', color: 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px', fontSize: '2rem', fontWeight: 800 }}>
-                      {username ? username.charAt(0).toUpperCase() : <User size={40} />}
-                    </div>
-                    <h2 style={{ margin: 0, color: 'var(--dark)' }}>{username || 'Ospite'}</h2>
-                    <div style={{ opacity: 0.6 }}>Livello {level} • {xp} XP</div>
-                  </div>
-                  <h3 style={{ margin: '0 0 8px', fontSize: '1.4rem', color: 'var(--primary)' }}>Aggiungi al Giardino?</h3>
-                  <p style={{ opacity: 0.7, margin: '0 0 24px', lineHeight: 1.5 }}>
-                    Vuoi salvare <b>{pendingPlant.name}</b> nel tuo giardino virtuale per monitorarne la salute?
-                  </p>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                    <button
-                      onClick={async () => {
-                        const btn = document.getElementById('btn-confirm-add');
-                        if (btn) { btn.innerHTML = '⏳ Salvataggio...'; (btn as HTMLButtonElement).disabled = true; }
-
-                        try {
-                          const { addUserPlant } = await import('./apiClient');
-                          const res = await addUserPlant(username!, {
-                            plant_name: pendingPlant.name,
-                            scientific_name: pendingPlant.scientificName,
-                            imageBase64: pendingPlant.image,
-                            diagnosis: pendingPlant.diagnosis
-                          });
-
-                          if (res.success) {
-                            setAchievementToast('Pianta aggiunta al giardino! 🌱');
-                            setTimeout(() => setAchievementToast(null), 3000);
-                            setShowAddToGardenConfirm(false);
-                            setPendingPlant(null);
-                            // Refresh plants if we are in garden mode
-                            if (activeMode === 'garden') {
-                              const plantsRes = await fetchUserPlants(username!);
-                              if (plantsRes.success) setUserPlants(plantsRes.data);
-                            }
-                          } else {
-                            alert('Errore salvataggio: ' + (res.error || 'Sconosciuto'));
-                            if (btn) { btn.innerHTML = 'SÌ, AGGIUNGI'; (btn as HTMLButtonElement).disabled = false; }
-                          }
-                        } catch (e) {
-                          alert('Errore invio dati.');
-                          if (btn) { btn.innerHTML = 'SÌ, AGGIUNGI'; (btn as HTMLButtonElement).disabled = false; }
-                        }
-                      }}
-                      id="btn-confirm-add"
-                      style={{ width: '100%', background: 'var(--primary)', color: 'white', border: 'none', padding: '16px', borderRadius: 100, fontWeight: 800, cursor: 'pointer', fontSize: '1rem' }}
-                    >
-                      SÌ, AGGIUNGI ORA
-                    </button>
-                    <button
-                      onClick={() => { setShowAddToGardenConfirm(false); setPendingPlant(null); }}
-                      style={{ width: '100%', background: 'transparent', color: 'var(--text-muted)', border: 'none', padding: '12px', cursor: 'pointer', fontWeight: 700 }}
-                    >
-                      No, grazie
-                    </button>
-                  </div>
-                </div>
-              </div>
-            )
-          }
-
-          {/* Toast Notifiche Premium */}
-          {
-            achievementToast && (
-              <div className="achievement-toast">
-                <div style={{ background: 'rgba(255,255,255,0.2)', padding: 8, borderRadius: 12 }}><Sparkles size={20} /></div>
-                <span>{achievementToast}</span>
-              </div>
-            )
-          }
-
-          {
-            isLeaderboardOpen && (
-              <div className="side-overlay" style={{ zIndex: 450 }}>
-                {/* Banner Header Integrato */}
-                {/* Banner Header Integrato (Uniformato) */}
-                <div style={{
-                  background: 'linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%)',
-                  padding: '24px 20px 28px',
-                  position: 'relative',
-                  boxShadow: '0 4px 20px rgba(0,0,0,0.15)',
-                  overflow: 'hidden',
-                  borderBottomLeftRadius: 32,
-                  borderBottomRightRadius: 32,
-                  flexShrink: 0
-                }}>
-                  <Sprout size={140} style={{ position: 'absolute', right: -20, top: -20, opacity: 0.1, color: 'white', transform: 'rotate(15deg)' }} />
-
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 16, position: 'relative', zIndex: 1 }}>
-                    <button
-                      className="btn-header-icon"
-                      onClick={() => setIsLeaderboardOpen(false)}
-                      style={{
-                        background: 'rgba(255,255,255,0.2)',
-                        color: 'white',
-                        border: 'none',
-                        width: 40,
-                        height: 40,
-                        borderRadius: 12,
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        cursor: 'pointer'
-                      }}>
-                      <ChevronLeft size={24} />
-                    </button>
-
-                    <div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                        <Trophy size={24} color="white" fill="white" fillOpacity={0.3} />
-                        <h2 style={{ margin: 0, color: 'white', fontSize: '1.5rem', fontWeight: 800, textShadow: '0 2px 4px rgba(0,0,0,0.1)' }}>Classifica Globale</h2>
-                      </div>
-                      <div style={{ color: 'rgba(255,255,255,0.85)', fontSize: '0.85rem', marginTop: 4, fontWeight: 500 }}>I migliori BioExpert della settimana</div>
-                    </div>
-                  </div>
-                </div>
-                <div className="overlay-content" style={{ padding: 0 }}>
-                  {/* Banner Premi Dinamico */}
-                  <div style={{
-                    background: activeLeaderboardType === 'beauty_contest' ? 'linear-gradient(135deg, var(--primary), var(--primary-dark))' : 'linear-gradient(135deg, #FFD700, #FFA000)',
-                    margin: '16px',
-                    borderRadius: '24px',
-                    padding: '20px',
-                    color: 'white',
-                    position: 'relative',
-                    overflow: 'hidden',
-                    boxShadow: activeLeaderboardType === 'beauty_contest' ? '0 8px 20px rgba(46, 125, 50, 0.3)' : '0 8px 20px rgba(255, 160, 0, 0.3)'
-                  }}>
-                    <Trophy size={80} style={{ position: 'absolute', right: -10, bottom: -10, opacity: 0.2, transform: 'rotate(15deg)' }} />
-                    <div style={{ position: 'relative', zIndex: 1 }}>
-                      <h4 style={{ margin: '0 0 8px', fontSize: '1.2rem', fontWeight: 900 }}>
-                        {activeLeaderboardType === 'beauty_contest' ? '🏆 PREMI DEL MESE' : '🏆 PREMI DELLA SETTIMANA'}
-                      </h4>
-                      <div style={{ fontSize: '0.85rem', lineHeight: 1.5, opacity: 0.95 }}>
-                        {activeLeaderboardType === 'beauty_contest'
-                          ? "I migliori curatori del mese riceveranno il badge 'Pollice Verde' e sconti esclusivi!"
-                          : "I primi 3 classificati riceveranno XP bonus e semi digitali rari per il proprio giardino!"}
-                      </div>
-                      <div style={{ display: 'flex', gap: 12, marginTop: 12 }}>
-                        {activeLeaderboardType === 'beauty_contest' ? (
-                          <>
-                            <div style={{ background: 'rgba(255,255,255,0.2)', padding: '4px 10px', borderRadius: 100, fontSize: '0.7rem', fontWeight: 800 }}>🥇 1000 XP</div>
-                            <div style={{ background: 'rgba(255,255,255,0.2)', padding: '4px 10px', borderRadius: 100, fontSize: '0.7rem', fontWeight: 800 }}>🥈 Badge Raro</div>
-                          </>
-                        ) : (
-                          <>
-                            <div style={{ background: 'rgba(255,255,255,0.2)', padding: '4px 10px', borderRadius: 100, fontSize: '0.7rem', fontWeight: 800 }}>🥇 500 XP</div>
-                            <div style={{ background: 'rgba(255,255,255,0.2)', padding: '4px 10px', borderRadius: 100, fontSize: '0.7rem', fontWeight: 800 }}>🥈 300 XP</div>
-                            <div style={{ background: 'rgba(255,255,255,0.2)', padding: '4px 10px', borderRadius: 100, fontSize: '0.7rem', fontWeight: 800 }}>🥉 150 XP</div>
-                          </>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-
-                  <div style={{ padding: '0 16px 24px' }}>
-                    {/* NEW DOUBLE CARD SELECTOR */}
-                    <div style={{ marginBottom: 24, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                      {/* Card 1: Concorso Globale */}
-                      <div
-                        onClick={() => { setActiveLeaderboardType('beauty_contest'); fetchLeaderboard(); }}
-                        style={{
-                          background: activeLeaderboardType === 'beauty_contest'
-                            ? 'linear-gradient(135deg, var(--primary), var(--primary-dark))'
-                            : 'var(--white)',
-                          color: activeLeaderboardType === 'beauty_contest' ? 'white' : 'var(--dark)',
-                          padding: 16,
-                          borderRadius: 24,
-                          border: `2px solid ${activeLeaderboardType === 'beauty_contest' ? 'transparent' : 'var(--card-border)'}`,
-                          cursor: 'pointer',
-                          transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-                          boxShadow: activeLeaderboardType === 'beauty_contest' ? '0 8px 20px rgba(46, 125, 50, 0.3)' : 'none',
-                          transform: activeLeaderboardType === 'beauty_contest' ? 'scale(1.02)' : 'scale(1)',
-                          position: 'relative',
-                          overflow: 'hidden',
-                          height: 160,
-                          display: 'flex',
-                          flexDirection: 'column',
-                          justifyContent: 'space-between'
-                        }}
-                      >
-                        {activeLeaderboardType === 'beauty_contest' && <Sparkles size={80} style={{ position: 'absolute', top: -20, right: -20, opacity: 0.1 }} />}
-
-                        <div>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                            <div style={{
-                              background: activeLeaderboardType === 'beauty_contest' ? 'rgba(255,255,255,0.2)' : 'var(--primary-light)',
-                              padding: 8,
-                              borderRadius: 12,
-                              color: activeLeaderboardType === 'beauty_contest' ? 'white' : 'var(--primary)'
-                            }}>
-                              <Award size={20} />
-                            </div>
-                            {(() => {
-                              const myRank = leaderboard.findIndex(u => u.username === username);
-                              return myRank !== -1 ? <div style={{ background: activeLeaderboardType === 'beauty_contest' ? 'white' : 'var(--primary)', color: activeLeaderboardType === 'beauty_contest' ? 'var(--primary)' : 'white', padding: '4px 8px', borderRadius: 8, fontSize: '0.7rem', fontWeight: 800 }}>#{myRank + 1}</div> : null;
-                            })()}
-                          </div>
-                          <h3 style={{ margin: '12px 0 4px', fontSize: '0.95rem', fontWeight: 800 }}>Generale</h3>
-                          <p style={{ margin: 0, fontSize: '0.75rem', opacity: 0.8, lineHeight: 1.3 }}>Bellezza vegetale assoluta</p>
-                        </div>
-
-                        {/* Mini Preview Classifica */}
-                        <div style={{ display: 'flex', alignItems: 'center', marginTop: 10 }}>
-                          {leaderboard.slice(0, 3).map((u, i) => (
-                            <div key={i} style={{
-                              width: 24, height: 24,
-                              borderRadius: '50%',
-                              background: activeLeaderboardType === 'beauty_contest' ? 'white' : '#eee',
-                              border: '2px solid white',
-                              marginLeft: i > 0 ? -8 : 0,
-                              fontSize: '0.6rem',
-                              display: 'flex', alignItems: 'center', justifyContent: 'center',
-                              fontWeight: 800,
-                              color: activeLeaderboardType === 'beauty_contest' ? 'var(--primary)' : '#666'
-                            }}>
-                              {u.username.charAt(0).toUpperCase()}
-                            </div>
-                          ))}
-                          {leaderboard.length > 3 && <div style={{ marginLeft: 6, fontSize: '0.7rem', fontWeight: 700, opacity: 0.8 }}>+{leaderboard.length - 3}</div>}
-                        </div>
-                      </div>
-
-                      {/* Card 2: Sfida Settimanale */}
-                      <div
-                        onClick={() => { setActiveLeaderboardType(weeklyChallenge.id); fetchLeaderboard(false, weeklyChallenge.id); }}
-                        style={{
-                          background: activeLeaderboardType !== 'beauty_contest'
-                            ? 'linear-gradient(135deg, #FF9800, #F57C00)'
-                            : 'var(--white)',
-                          color: activeLeaderboardType !== 'beauty_contest' ? 'white' : 'var(--dark)',
-                          padding: 16,
-                          borderRadius: 24,
-                          border: `2px solid ${activeLeaderboardType !== 'beauty_contest' ? 'transparent' : 'var(--card-border)'}`,
-                          cursor: 'pointer',
-                          transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-                          boxShadow: activeLeaderboardType !== 'beauty_contest' ? '0 8px 20px rgba(245, 124, 0, 0.3)' : 'none',
-                          transform: activeLeaderboardType !== 'beauty_contest' ? 'scale(1.02)' : 'scale(1)',
-                          position: 'relative',
-                          overflow: 'hidden',
-                          height: 160,
-                          display: 'flex',
-                          flexDirection: 'column',
-                          justifyContent: 'space-between'
-                        }}
-                      >
-                        {activeLeaderboardType !== 'beauty_contest' && <Star size={80} style={{ position: 'absolute', top: -20, right: -20, opacity: 0.1 }} />}
-
-                        <div>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                            <div style={{
-                              background: activeLeaderboardType !== 'beauty_contest' ? 'rgba(255,255,255,0.2)' : '#FFF3E0',
-                              padding: 8,
-                              borderRadius: 12,
-                              color: activeLeaderboardType !== 'beauty_contest' ? 'white' : '#F57C00'
-                            }}>
-                              <Star size={20} />
-                            </div>
-                            {(() => {
-                              const myRank = weeklyLeaderboard.findIndex(u => u.username === username);
-                              return myRank !== -1 ? <div style={{ background: activeLeaderboardType !== 'beauty_contest' ? 'white' : '#F57C00', color: activeLeaderboardType !== 'beauty_contest' ? '#F57C00' : 'white', padding: '4px 8px', borderRadius: 8, fontSize: '0.7rem', fontWeight: 800 }}>#{myRank + 1}</div> : null;
-                            })()}
-                          </div>
-                          <h3 style={{ margin: '12px 0 4px', fontSize: '0.95rem', fontWeight: 800 }}>Settimanale</h3>
-                          <p style={{ margin: 0, fontSize: '0.75rem', opacity: 0.8, lineHeight: 1.3 }}>{weeklyChallenge.requirement}</p>
-                        </div>
-
-                        {/* Mini Preview Classifica */}
-                        <div style={{ display: 'flex', alignItems: 'center', marginTop: 10 }}>
-                          {weeklyLeaderboard.slice(0, 3).map((u, i) => (
-                            <div key={i} style={{
-                              width: 24, height: 24,
-                              borderRadius: '50%',
-                              background: activeLeaderboardType !== 'beauty_contest' ? 'white' : '#eee',
-                              border: '2px solid white',
-                              marginLeft: i > 0 ? -8 : 0,
-                              fontSize: '0.6rem',
-                              display: 'flex', alignItems: 'center', justifyContent: 'center',
-                              fontWeight: 800,
-                              color: activeLeaderboardType !== 'beauty_contest' ? '#F57C00' : '#666'
-                            }}>
-                              {u.username.charAt(0).toUpperCase()}
-                            </div>
-                          ))}
-                          {weeklyLeaderboard.length > 3 && <div style={{ marginLeft: 6, fontSize: '0.7rem', fontWeight: 700, opacity: 0.8 }}>+{weeklyLeaderboard.length - 3}</div>}
-                        </div>
-                      </div>
-                    </div>
-
-                    <h3 style={{ marginTop: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
-                      {activeLeaderboardType === 'beauty_contest' ? <Award size={20} color="var(--primary)" /> : <Star size={20} color="#F57C00" />}
-                      {activeLeaderboardType === 'beauty_contest' ? 'Classifica Generale' : weeklyChallenge.title}
-                    </h3>
-
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                      {!(activeLeaderboardType === 'beauty_contest' ? leaderboard : weeklyLeaderboard).length && (activeLeaderboardType === 'beauty_contest' ? leaderboard : weeklyLeaderboard).length === 0 ? (
-                        <div style={{ textAlign: 'center', padding: 40, opacity: 0.5 }}>
-                          <p>Nessun campione ancora...</p>
-                        </div>
-                      ) : (
-                        <>
-                          {(activeLeaderboardType === 'beauty_contest' ? leaderboard : weeklyLeaderboard).map((entry: any, idx) => {
-                            if (!entry) return null;
-                            const isTop3 = idx < 3;
-                            const bg = idx === 0 ? 'linear-gradient(135deg, #FFF9C4 0%, #FFFDE7 100%)' :
-                              idx === 1 ? 'linear-gradient(135deg, #F5F5F5 0%, #FAFAFA 100%)' :
-                                idx === 2 ? 'linear-gradient(135deg, #EFEBE9 0%, #FBE9E7 100%)' : 'white';
-                            const border = idx === 0 ? '2px solid #FFD700' :
-                              idx === 1 ? '2px solid #C0C0C0' :
-                                idx === 2 ? '2px solid #CD7F32' : '1px solid var(--card-border)';
-
-                            return (
-                              <div key={idx} onClick={() => setSelectedEntry(entry)} style={{
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: 12,
-                                padding: isTop3 ? '16px' : '12px 16px',
-                                background: bg,
-                                borderRadius: 20,
-                                border: border,
-                                boxShadow: isTop3 ? '0 4px 15px rgba(0,0,0,0.05)' : 'none',
-                                cursor: 'pointer'
-                              }}>
-                                <div style={{
-                                  width: 32,
-                                  height: 32,
-                                  borderRadius: '50%',
-                                  background: isTop3 ? 'white' : 'transparent',
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  justifyContent: 'center',
-                                  fontWeight: 900,
-                                  fontSize: isTop3 ? '1.2rem' : '0.9rem',
-                                  color: isTop3 ? 'var(--dark)' : 'var(--text-muted)'
-                                }}>
-                                  {idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : idx + 1}
-                                </div>
-
-                                <div style={{ position: 'relative' }}>
-                                  <img
-                                    src={entry.image_url || entry.image || 'https://placehold.co/100x100/e8f5e9/2e7d32?text=🌿'}
-                                    style={{ width: 50, height: 50, borderRadius: 12, objectFit: 'cover', border: '2px solid var(--card-border)' }}
-                                    onError={(e) => { e.currentTarget.src = 'https://placehold.co/100x100/e8f5e9/2e7d32?text=🌿'; }}
-                                  />
-                                  {isTop3 && <div style={{ position: 'absolute', bottom: -5, right: -5, background: 'white', borderRadius: '50%', padding: 2, boxShadow: '0 2px 5px rgba(0,0,0,0.1)' }}><Award size={14} color={idx === 0 ? '#FFD700' : idx === 1 ? '#C0C0C0' : '#CD7F32'} /></div>}
-                                </div>
-
-                                <div style={{ flex: 1 }}>
-                                  <div style={{ fontWeight: 800, fontSize: isTop3 ? '1rem' : '0.9rem', color: entry.username === username ? 'var(--primary)' : 'var(--dark)' }}>
-                                    {entry.username || 'Anonimo'} {entry.username === username && '(Tu)'}
-                                  </div>
-                                  {entry.plant_name && <div style={{ fontSize: '0.75rem', fontWeight: 700, fontStyle: 'italic', color: 'var(--primary)', marginBottom: 2 }}>{entry.plant_name}</div>}
-                                  <div style={{ fontSize: '0.7rem', opacity: 0.5 }}>{new Date(entry.created_at || entry.timestamp).toLocaleDateString()}</div>
-                                </div>
-
-                                <div style={{ textAlign: 'right' }}>
-                                  <div style={{ fontWeight: 900, color: 'var(--primary)', fontSize: '1.1rem' }}>{entry.score}</div>
-                                  <div style={{ fontSize: '0.6rem', fontWeight: 700, opacity: 0.4 }}>PUNTI AI</div>
-                                </div>
-                              </div>
-                            );
-                          })}
-                        </>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )
-          }
-
-          {
-            confirmToast && (
-              <div className="toast-confirm-overlay">
-                <div className="toast-confirm-box">
-                  <h3 style={{ margin: 0, color: 'var(--dark)' }}>Conferma</h3>
-                  <p style={{ margin: 0, opacity: 0.8, lineHeight: 1.4 }}>{confirmToast.message}</p>
-                  <div className="toast-actions">
-                    <button className="cancel-btn" onClick={confirmToast.onCancel}>Annulla</button>
-                    <button className="confirm-danger" onClick={confirmToast.onConfirm}>Elimina</button>
-                  </div>
-                </div>
-              </div>
-            )
-          }
-
-          {/* Modal Dettaglio Entry Classifica */}
-          {
-            selectedEntry && (
-              <div className="toast-confirm-overlay" onClick={() => setSelectedEntry(null)}>
-                <div className="toast-confirm-box" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 500, padding: 0, overflow: 'hidden' }}>
-                  {(selectedEntry.image_url || selectedEntry.image) && (
-                    <img
-                      src={selectedEntry.image_url || selectedEntry.image}
-                      style={{ width: '100%', height: 300, objectFit: 'cover' }}
-                      alt="Foto concorso"
-                    />
-                  )}
-                  <div style={{ padding: 24 }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
-                      <div>
-                        <h3 style={{ margin: '0 0 8px 0', color: 'var(--primary)', fontSize: '1.4rem' }}>{selectedEntry.username}</h3>
-                        <div style={{ fontSize: '0.85rem', opacity: 0.6 }}>{new Date(selectedEntry.created_at || selectedEntry.timestamp).toLocaleDateString('it-IT', { day: 'numeric', month: 'long', year: 'numeric' })}</div>
-                      </div>
-                      <div style={{ textAlign: 'right' }}>
-                        <div style={{ fontSize: '2rem', fontWeight: 900, color: 'var(--primary)' }}>{selectedEntry.score}</div>
-                        <div style={{ fontSize: '0.7rem', fontWeight: 700, opacity: 0.5 }}>PUNTI AI</div>
-                      </div>
-                    </div>
-
-                    {selectedEntry.plant_name && (
-                      <div style={{ background: 'var(--primary-light)', padding: 16, borderRadius: 16, marginBottom: 16 }}>
-                        <div style={{ fontSize: '0.75rem', fontWeight: 800, color: 'var(--primary)', marginBottom: 4 }}>PIANTA FOTOGRAFATA</div>
-                        <div style={{ fontWeight: 700, fontSize: '1.1rem' }}>{selectedEntry.plant_name}</div>
-                        {selectedEntry.scientific_name && (
-                          <div style={{ fontSize: '0.85rem', opacity: 0.7, fontStyle: 'italic', marginTop: 2 }}>{selectedEntry.scientific_name}</div>
-                        )}
-                      </div>
-                    )}
-
-                    {selectedEntry.health_status && (
-                      <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
-                        <div style={{
-                          flex: 1,
-                          padding: 12,
-                          borderRadius: 12,
-                          background: selectedEntry.health_status === 'healthy' ? '#e8f5e9' : '#ffebee',
-                          color: selectedEntry.health_status === 'healthy' ? '#2e7d32' : '#d32f2f',
-                          fontWeight: 800,
-                          fontSize: '0.85rem',
-                          textAlign: 'center'
-                        }}>
-                          {selectedEntry.health_status === 'healthy' ? '✓ SANA' : '⚠ MALATA'}
-                        </div>
-                      </div>
-                    )}
-
-                    <button
-                      onClick={() => setSelectedEntry(null)}
-                      style={{
-                        width: '100%',
-                        padding: 14,
-                        background: 'var(--primary)',
-                        color: 'white',
-                        border: 'none',
-                        borderRadius: 100,
-                        fontWeight: 800,
-                        cursor: 'pointer'
-                      }}
-                    >
-                      CHIUDI
-                    </button>
-                  </div>
-                </div>
-              )}
-              </div>
-              </div>
+            </div>
+          </div>
         )
-          }
+      }
 
-        {showAuthModal && <AuthModal isOpen={showAuthModal} onClose={() => setShowAuthModal(false)} onSuccess={(u) => { setUsername(u); setLocalUsername(u); }} />}
-      </div >
-    </>);
+      {
+        confirmToast && (
+          <div className="toast-confirm-overlay">
+            <div className="toast-confirm-box">
+              <h3 style={{ margin: 0, color: 'var(--dark)' }}>Conferma</h3>
+              <p style={{ margin: 0, opacity: 0.8, lineHeight: 1.4 }}>{confirmToast.message}</p>
+              <div className="toast-actions">
+                <button className="cancel-btn" onClick={confirmToast.onCancel}>Annulla</button>
+                <button className="confirm-danger" onClick={confirmToast.onConfirm}>Elimina</button>
+              </div>
+            </div>
+          </div>
+        )
+      }
+
+      {/* Modal Dettaglio Entry Classifica */}
+      {
+        selectedEntry && (
+          <div className="toast-confirm-overlay" onClick={() => setSelectedEntry(null)}>
+            <div className="toast-confirm-box" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 500, padding: 0, overflow: 'hidden' }}>
+              {(selectedEntry.image_url || selectedEntry.image) && (
+                <img
+                  src={selectedEntry.image_url || selectedEntry.image}
+                  style={{ width: '100%', height: 300, objectFit: 'cover' }}
+                  alt="Foto concorso"
+                />
+              )}
+              <div style={{ padding: 24 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
+                  <div>
+                    <h3 style={{ margin: '0 0 8px 0', color: 'var(--primary)', fontSize: '1.4rem' }}>{selectedEntry.username}</h3>
+                    <div style={{ fontSize: '0.85rem', opacity: 0.6 }}>{new Date(selectedEntry.created_at || selectedEntry.timestamp).toLocaleDateString('it-IT', { day: 'numeric', month: 'long', year: 'numeric' })}</div>
+                  </div>
+                  <div style={{ textAlign: 'right' }}>
+                    <div style={{ fontSize: '2rem', fontWeight: 900, color: 'var(--primary)' }}>{selectedEntry.score}</div>
+                    <div style={{ fontSize: '0.7rem', fontWeight: 700, opacity: 0.5 }}>PUNTI AI</div>
+                  </div>
+                </div>
+
+                {selectedEntry.plant_name && (
+                  <div style={{ background: 'var(--primary-light)', padding: 16, borderRadius: 16, marginBottom: 16 }}>
+                    <div style={{ fontSize: '0.75rem', fontWeight: 800, color: 'var(--primary)', marginBottom: 4 }}>PIANTA FOTOGRAFATA</div>
+                    <div style={{ fontWeight: 700, fontSize: '1.1rem' }}>{selectedEntry.plant_name}</div>
+                    {selectedEntry.scientific_name && (
+                      <div style={{ fontSize: '0.85rem', opacity: 0.7, fontStyle: 'italic', marginTop: 2 }}>{selectedEntry.scientific_name}</div>
+                    )}
+                  </div>
+                )}
+
+                {selectedEntry.health_status && (
+                  <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
+                    <div style={{
+                      flex: 1,
+                      padding: 12,
+                      borderRadius: 12,
+                      background: selectedEntry.health_status === 'healthy' ? '#e8f5e9' : '#ffebee',
+                      color: selectedEntry.health_status === 'healthy' ? '#2e7d32' : '#d32f2f',
+                      fontWeight: 800,
+                      fontSize: '0.85rem',
+                      textAlign: 'center'
+                    }}>
+                      {selectedEntry.health_status === 'healthy' ? '✓ SANA' : '⚠ MALATA'}
+                    </div>
+                  </div>
+                )}
+
+                <button
+                  onClick={() => setSelectedEntry(null)}
+                  style={{
+                    width: '100%',
+                    padding: 14,
+                    background: 'var(--primary)',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: 100,
+                    fontWeight: 800,
+                    cursor: 'pointer'
+                  }}
+                >
+                  CHIUDI
+                </button>
+              </div>
+            </div>
+          </div>
+        )
+      }
+
+      {showAuthModal && <AuthModal isOpen={showAuthModal} onClose={() => setShowAuthModal(false)} onSuccess={(u) => { setUsername(u); setLocalUsername(u); }} />}
+    </div >
+  );
 }
 
-    export default App;
+export default App;
 
-    interface ErrorBoundaryProps {
-      children: React.ReactNode;
+interface ErrorBoundaryProps {
+  children: React.ReactNode;
 }
 
-    interface ErrorBoundaryState {
-      hasError: boolean;
-    error: any;
+interface ErrorBoundaryState {
+  hasError: boolean;
+  error: any;
 }
 
-    class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
-      constructor(props: ErrorBoundaryProps) {
-      super(props);
-    this.state = {hasError: false, error: null };
+class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
+  constructor(props: ErrorBoundaryProps) {
+    super(props);
+    this.state = { hasError: false, error: null };
   }
 
-    static getDerivedStateFromError(error: any) {
-    return {hasError: true, error };
+  static getDerivedStateFromError(error: any) {
+    return { hasError: true, error };
   }
 
-    componentDidCatch(error: any, errorInfo: any) {
-      console.error("ErrorBoundary caught an error", error, errorInfo);
+  componentDidCatch(error: any, errorInfo: any) {
+    console.error("ErrorBoundary caught an error", error, errorInfo);
   }
 
-    render() {
+  render() {
     if (this.state.hasError) {
       return (
-    <div style={{ padding: 20, fontFamily: 'system-ui, sans-serif', color: '#333', maxWidth: 600, margin: '20px auto' }}>
-      <h1 style={{ color: '#BA1A1A' }}>Errore Imprevisto 😔</h1>
-      <p>L'applicazione ha riscontrato un errore critico.</p>
-      <div style={{ background: '#fee', padding: 15, borderRadius: 8, overflow: 'auto', fontFamily: 'monospace', border: '1px solid #fcc', fontSize: 13, marginBottom: 20 }}>
-        {this.state.error?.toString()}
-      </div>
-      <button onClick={() => window.location.reload()} style={{ padding: '12px 24px', fontSize: 16, background: '#333', color: 'white', border: 'none', borderRadius: 8, cursor: 'pointer' }}>
-        Ricarica Pagina
-      </button>
-    </div>
-    );
+        <div style={{ padding: 20, fontFamily: 'system-ui, sans-serif', color: '#333', maxWidth: 600, margin: '20px auto' }}>
+          <h1 style={{ color: '#BA1A1A' }}>Errore Imprevisto 😔</h1>
+          <p>L'applicazione ha riscontrato un errore critico.</p>
+          <div style={{ background: '#fee', padding: 15, borderRadius: 8, overflow: 'auto', fontFamily: 'monospace', border: '1px solid #fcc', fontSize: 13, marginBottom: 20 }}>
+            {this.state.error?.toString()}
+          </div>
+          <button onClick={() => window.location.reload()} style={{ padding: '12px 24px', fontSize: 16, background: '#333', color: 'white', border: 'none', borderRadius: 8, cursor: 'pointer' }}>
+            Ricarica Pagina
+          </button>
+        </div>
+      );
     }
     return this.props.children;
   }
 }
 
-    const container = document.getElementById('root');
-    if (container) {
-      createRoot(container).render(
-        <ErrorBoundary>
-          <App />
-        </ErrorBoundary>
-      );
+const container = document.getElementById('root');
+if (container) {
+  createRoot(container).render(
+    <ErrorBoundary>
+      <App />
+    </ErrorBoundary>
+  );
 }
