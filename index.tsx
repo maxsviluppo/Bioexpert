@@ -1,7 +1,7 @@
 
 import React, { useState, useRef, useEffect, useMemo, Component } from 'react';
 import { createRoot } from 'react-dom/client';
-import { GoogleGenAI, Type } from '@google/genai';
+import { GoogleGenerativeAI, SchemaType } from "@google/generative-ai";
 import { Camera, Send, Sprout, Info, RefreshCw, MessageSquare, Droplets, AlertTriangle, CheckCircle2, Settings, Moon, Bell, Mountain, Sparkles, History, Share2, Trash2, Zap, ChevronLeft, Key, ExternalLink, Trophy, Target, Gamepad2, Upload, User, ShieldAlert, Clock, Leaf, Apple, Layers, Maximize2, Terminal, ChevronRight, Star, Award, Sun, CameraOff, HelpCircle, ShieldCheck, Heart, LogOut, Mail, Code, Scissors, Inbox, Download, X, Home, BookOpen, Plus, Calendar, Flower, Flower2, TreePine, FileText, Package, Image as ImageIcon, Wand2, Lock, CheckCircle } from 'lucide-react';
 
 import {
@@ -2103,30 +2103,29 @@ function App() {
         prompt = `Questa sfida richiede specificamente: ${info.requirement}. Analizza l'immagine. DEVE contenere: ${info.requirement}. Se l'immagine NON contiene ${info.requirement} o è inappropriata/selfie, imposta "is_valid" a false. Se valida, valuta bellezza da 1 a 100. Restituisci JSON.`;
       }
 
-      const ai = new GoogleGenAI({ apiKey: GEMINI_KEY });
-      const res = await ai.models.generateContent({
-        model: 'gemini-1.5-flash',
-        contents: {
-          parts: [
-            { inlineData: { data: photo.split(',')[1], mimeType: 'image/jpeg' } },
-            { text: prompt }
-          ]
-        },
-        config: {
+      const genAI = new GoogleGenerativeAI(GEMINI_KEY);
+      const model = genAI.getGenerativeModel({
+        model: "gemini-1.5-flash",
+        generationConfig: {
           responseMimeType: "application/json",
           responseSchema: {
-            type: Type.OBJECT,
+            type: SchemaType.OBJECT,
             properties: {
-              score: { type: Type.NUMBER },
-              plant_name: { type: Type.STRING },
-              is_valid: { type: Type.BOOLEAN },
-              rejection_reason: { type: Type.STRING }
+              score: { type: SchemaType.NUMBER },
+              plant_name: { type: SchemaType.STRING },
+              is_valid: { type: SchemaType.BOOLEAN },
+              rejection_reason: { type: SchemaType.STRING }
             },
             required: ['score', 'plant_name', 'is_valid']
           }
         }
       });
-      const data = JSON.parse(res.text || '{}');
+
+      const result = await model.generateContent([
+        { inlineData: { data: photo.split(',')[1], mimeType: 'image/jpeg' } },
+        { text: prompt }
+      ]);
+      const data = JSON.parse(result.response.text());
 
       if (data.is_valid === false) {
         setAchievementToast(`⛔ Foto Rifiutata: ${data.rejection_reason || 'Soggetto non pertinente!'}`);
@@ -2230,36 +2229,24 @@ function App() {
   const generateQuestQuestions = async (photo: string) => {
     try {
       const quest = QUESTS.find(q => q.id === activeGame);
-      const ai = new GoogleGenAI({ apiKey: GEMINI_KEY });
-
-      const prompt = `La sfida è fotografare: ${quest?.requirement}.
-      Analizza l'immagine. 
-      Se l'immagine NON contiene ${quest?.requirement} o è inappropriata, un selfie, o sfocata, imposta "is_valid" a false e spiega perché.
-      Se l'immagine è valida, imposta "is_valid" a true e genera 3 domande educative specifiche (con 4 opzioni e indice corretta).`;
-
-      const res = await ai.models.generateContent({
-        model: 'gemini-1.5-flash',
-        contents: {
-          parts: [
-            { inlineData: { data: photo.split(',')[1], mimeType: 'image/jpeg' } },
-            { text: prompt }
-          ]
-        },
-        config: {
+      const genAI = new GoogleGenerativeAI(GEMINI_KEY);
+      const model = genAI.getGenerativeModel({
+        model: "gemini-1.5-flash",
+        generationConfig: {
           responseMimeType: "application/json",
           responseSchema: {
-            type: Type.OBJECT,
+            type: SchemaType.OBJECT,
             properties: {
-              is_valid: { type: Type.BOOLEAN },
-              rejection_reason: { type: Type.STRING },
+              is_valid: { type: SchemaType.BOOLEAN },
+              rejection_reason: { type: SchemaType.STRING },
               questions: {
-                type: Type.ARRAY,
+                type: SchemaType.ARRAY,
                 items: {
-                  type: Type.OBJECT,
+                  type: SchemaType.OBJECT,
                   properties: {
-                    question: { type: Type.STRING },
-                    options: { type: Type.ARRAY, items: { type: Type.STRING } },
-                    correct: { type: Type.NUMBER }
+                    question: { type: SchemaType.STRING },
+                    options: { type: SchemaType.ARRAY, items: { type: SchemaType.STRING } },
+                    correct: { type: SchemaType.NUMBER }
                   }
                 }
               }
@@ -2269,7 +2256,17 @@ function App() {
         }
       });
 
-      const data = JSON.parse(res.text || '{}');
+      const prompt = `La sfida è fotografare: ${quest?.requirement}.
+      Analizza l'immagine. 
+      Se l'immagine NON contiene ${quest?.requirement} o è inappropriata, un selfie, o sfocata, imposta "is_valid" a false e spiega perché.
+      Se l'immagine è valida, imposta "is_valid" a true e genera 3 domande educative specifiche (con 4 opzioni e indice corretta).`;
+
+      const result = await model.generateContent([
+        { inlineData: { data: photo.split(',')[1], mimeType: 'image/jpeg' } },
+        { text: prompt }
+      ]);
+
+      const data = JSON.parse(result.response.text());
 
       if (data.is_valid === false) {
         setAchievementToast(`⛔ Foto non valida: ${data.rejection_reason || 'Riprova!'}`);
@@ -2395,29 +2392,28 @@ function App() {
 
       try {
         // Analisi AI
-        const ai = new GoogleGenAI({ apiKey: GEMINI_KEY });
-        const res = await ai.models.generateContent({
-          model: 'gemini-1.5-flash',
-          contents: {
-            parts: [
-              { inlineData: { data: photo.split(',')[1], mimeType: 'image/jpeg' } },
-              { text: "Analizza questa pianta. Restituisci JSON con: healthScore (0-100), improvements (array di miglioramenti rilevati), recommendations (consigli)." }
-            ]
-          },
-          config: {
+        const genAI = new GoogleGenerativeAI(GEMINI_KEY);
+        const model = genAI.getGenerativeModel({
+          model: "gemini-1.5-flash",
+          generationConfig: {
             responseMimeType: "application/json",
             responseSchema: {
-              type: Type.OBJECT,
+              type: SchemaType.OBJECT,
               properties: {
-                healthScore: { type: Type.NUMBER },
-                improvements: { type: Type.ARRAY, items: { type: Type.STRING } },
-                recommendations: { type: Type.STRING }
+                healthScore: { type: SchemaType.NUMBER },
+                improvements: { type: SchemaType.ARRAY, items: { type: SchemaType.STRING } },
+                recommendations: { type: SchemaType.STRING }
               }
             }
           }
         });
 
-        const aiAnalysis = JSON.parse(res.text || '{}');
+        const result = await model.generateContent([
+          { inlineData: { data: photo.split(',')[1], mimeType: 'image/jpeg' } },
+          { text: "Analizza questa pianta. Restituisci JSON con: healthScore (0-100), improvements (array di miglioramenti rilevati), recommendations (consigli)." }
+        ]);
+
+        const aiAnalysis = JSON.parse(result.response.text());
 
         // Se è il primo checkpoint (creazione programma)
         if (!activeCareProgram && fullScreenAnalysis) {
@@ -2498,14 +2494,50 @@ function App() {
     if (!capturedImg) return;
     setIsAnalyzing(true);
     try {
-      const ai = new GoogleGenAI({ apiKey: GEMINI_KEY });
-      const res = await ai.models.generateContent({
-        model: 'gemini-1.5-flash',
-        contents: {
-          parts: [
-            { inlineData: { data: capturedImg.split(',')[1], mimeType: 'image/jpeg' } },
-            {
-              text: `Identifica questa pianta/fungo/frutto e ANALIZZA ATTENTAMENTE LO STATO DALLA FOTO.
+      const genAI = new GoogleGenerativeAI(GEMINI_KEY);
+      const model = genAI.getGenerativeModel({
+        model: "gemini-1.5-flash",
+        generationConfig: {
+          responseMimeType: "application/json",
+          responseSchema: {
+            type: SchemaType.OBJECT,
+            properties: {
+              name: { type: SchemaType.STRING },
+              scientificName: { type: SchemaType.STRING },
+              category: { type: SchemaType.STRING, enum: ['Fungo', 'Succulenta', 'Erba Aromatica', 'Fiore', 'Albero', 'Pianta', 'Frutto', 'Ortaggio', 'Altro'] },
+              healthStatus: { type: SchemaType.STRING, enum: ['healthy', 'sick', 'unknown'] },
+              diagnosis: { type: SchemaType.STRING },
+              care: {
+                type: SchemaType.OBJECT,
+                properties: {
+                  general: { type: SchemaType.STRING },
+                  watering: { type: SchemaType.STRING },
+                  pruning: { type: SchemaType.STRING },
+                  repotting: { type: SchemaType.STRING }
+                },
+                required: ['general', 'watering', 'pruning', 'repotting']
+              },
+              careTips: {
+                type: SchemaType.OBJECT,
+                properties: {
+                  wateringTip: { type: SchemaType.STRING },
+                  lightTip: { type: SchemaType.STRING },
+                  pruningTip: { type: SchemaType.STRING },
+                  generalTip: { type: SchemaType.STRING }
+                },
+                required: ['wateringTip', 'lightTip', 'pruningTip', 'generalTip']
+              },
+              bloomDescription: { type: SchemaType.STRING }
+            },
+            required: ['name', 'scientificName', 'category', 'healthStatus', 'diagnosis', 'care', 'careTips', 'bloomDescription']
+          }
+        }
+      });
+
+      const result = await model.generateContent([
+        { inlineData: { data: capturedImg.split(',')[1], mimeType: 'image/jpeg' } },
+        {
+          text: `Identifica questa pianta/fungo/frutto e ANALIZZA ATTENTAMENTE LO STATO DALLA FOTO.
 
 Restituisci JSON con:
 - name: Nome comune italiano
@@ -2531,46 +2563,10 @@ Se la pianta è MALATA, i careTips devono essere INTERVENTI URGENTI specifici.
 
 - bloomDescription: Descrizione fioritura o fogliame decorativo.
 
-Lingua: ITALIANO. Sii SPECIFICO per questa pianta e il suo stato attuale.` }
-          ]
-        },
-        config: {
-          responseMimeType: "application/json",
-          responseSchema: {
-            type: Type.OBJECT,
-            properties: {
-              name: { type: Type.STRING },
-              scientificName: { type: Type.STRING },
-              category: { type: Type.STRING, enum: ['Fungo', 'Succulenta', 'Erba Aromatica', 'Fiore', 'Albero', 'Pianta', 'Frutto', 'Ortaggio', 'Altro'] },
-              healthStatus: { type: Type.STRING, enum: ['healthy', 'sick', 'unknown'] },
-              diagnosis: { type: Type.STRING },
-              care: {
-                type: Type.OBJECT,
-                properties: {
-                  general: { type: Type.STRING },
-                  watering: { type: Type.STRING },
-                  pruning: { type: Type.STRING },
-                  repotting: { type: Type.STRING }
-                },
-                required: ['general', 'watering', 'pruning', 'repotting']
-              },
-              careTips: {
-                type: Type.OBJECT,
-                properties: {
-                  wateringTip: { type: Type.STRING },
-                  lightTip: { type: Type.STRING },
-                  pruningTip: { type: Type.STRING },
-                  generalTip: { type: Type.STRING }
-                },
-                required: ['wateringTip', 'lightTip', 'pruningTip', 'generalTip']
-              },
-              bloomDescription: { type: Type.STRING }
-            },
-            required: ['name', 'scientificName', 'category', 'healthStatus', 'diagnosis', 'care', 'careTips', 'bloomDescription']
-          }
+Lingua: ITALIANO. Sii SPECIFICO per questa pianta e il suo stato attuale.`
         }
-      });
-      const data = JSON.parse(res.text || '{}');
+      ]);
+      const data = JSON.parse(result.response.text());
       const entry: PlantAnalysis = { ...data, id: crypto.randomUUID(), timestamp: Date.now(), image: capturedImg, source: 'analysis' };
       setMessages(prev => [...prev, { role: 'analysis', data: entry }]);
       setHistory(prev => [entry, ...prev]);
@@ -2619,13 +2615,13 @@ Lingua: ITALIANO. Sii SPECIFICO per questa pianta e il suo stato attuale.` }
     try {
       const lastAnalysis = [...messages].reverse().find(m => m.role === 'analysis')?.data;
       const context = lastAnalysis ? `L'utente ha analizzato un ${lastAnalysis.name}. Rispondi in base a questa pianta se pertinente, fornendo diagnosi o cure se richiesto.` : "";
-      const ai = new GoogleGenAI({ apiKey: GEMINI_KEY });
-      const res = await ai.models.generateContent({
-        model: 'gemini-1.5-flash',
-        contents: context + input,
-        config: { systemInstruction: "Sei BioExpert AI. Rispondi in Italiano con tono amichevole ma esperto. IMPORTANTE: Usa liste puntate (- punto) per elenchi. Usa il **grassetto** per concetti chiave. Sii ordinato e pulito. Se la pianta è malata, dividi la risposta in sezioni chiare." }
+      const genAI = new GoogleGenerativeAI(GEMINI_KEY);
+      const model = genAI.getGenerativeModel({
+        model: "gemini-1.5-flash",
+        systemInstruction: "Sei BioExpert AI. Rispondi in Italiano con tono amichevole ma esperto. IMPORTANTE: Usa liste puntate (- punto) per elenchi. Usa il **grassetto** per concetti chiave. Sii ordinato e pulito. Se la pianta è malata, dividi la risposta in sezioni chiare."
       });
-      setMessages(prev => [...prev, { role: 'bot', text: res.text || "Errore risposta." }]);
+      const result = await model.generateContent(context + input);
+      setMessages(prev => [...prev, { role: 'bot', text: result.response.text() || "Errore risposta." }]);
       addXp(5);
     } catch (e) { setMessages(prev => [...prev, { role: 'bot', text: "Errore connessione." }]); }
     finally { setIsChatLoading(false); }
