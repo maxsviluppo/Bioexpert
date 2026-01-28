@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, useEffect, useMemo, Component } from 'react';
 import { createRoot } from 'react-dom/client';
 import { GoogleGenAI, Type } from '@google/genai';
@@ -24,10 +25,16 @@ import {
   captureImageAsBase64,
   fetchUserInfo,
   updateUserInfo,
-  createCareProgram,
-  getCareProgram,
-  completeCheckpoint
+  // createCareProgram rimosso
+  // getCareProgram rimosso
+  // completeCheckpoint rimosso
 } from './apiClient';
+import { AuthModal } from './AuthModal';
+
+// Stub per funzioni rimosse per evitare crash
+const createCareProgram = async (...args: any[]) => ({ success: false, error: 'Funzione non disponibile' });
+const getCareProgram = async (...args: any[]) => ({ success: false, error: 'Funzione non disponibile' });
+const completeCheckpoint = async (...args: any[]) => ({ success: false, error: 'Funzione non disponibile' });
 
 // Helper per Gemini (se non già presente)
 const imageToGenerativePart = (base64Image: string, mimeType: string) => {
@@ -38,16 +45,9 @@ const imageToGenerativePart = (base64Image: string, mimeType: string) => {
     }
   };
 };
-import { AuthModal } from './AuthModal';
 
 // Gestione Robustezza API Key
-const GEMINI_KEY = import.meta.env.VITE_GEMINI_API_KEY || (process as any).env?.GEMINI_API_KEY || (process as any).env?.API_KEY || 'AlzaSyBQk0ASh35YWvPoACz82uN-3yYInd1_zHo';
-
-console.log('🔑 [DEBUG] Stato API Key:', {
-  present: !!GEMINI_KEY,
-  length: GEMINI_KEY?.length || 0,
-  firstChar: GEMINI_KEY ? GEMINI_KEY.substring(0, 4) + '...' : 'N/A'
-});
+const GEMINI_KEY = import.meta.env.VITE_GEMINI_API_KEY || 'AIzaSyBQk0ASh35YWvPoACz82uN-3yYlnd1_zHo';
 
 // --- STYLES ---
 const styles = `
@@ -2105,7 +2105,7 @@ function App() {
 
       const ai = new GoogleGenAI({ apiKey: GEMINI_KEY });
       const res = await ai.models.generateContent({
-        model: 'gemini-3-flash-preview',
+        model: 'gemini-1.5-flash',
         contents: {
           parts: [
             { inlineData: { data: photo.split(',')[1], mimeType: 'image/jpeg' } },
@@ -2238,7 +2238,7 @@ function App() {
       Se l'immagine è valida, imposta "is_valid" a true e genera 3 domande educative specifiche (con 4 opzioni e indice corretta).`;
 
       const res = await ai.models.generateContent({
-        model: 'gemini-3-flash-preview',
+        model: 'gemini-1.5-flash',
         contents: {
           parts: [
             { inlineData: { data: photo.split(',')[1], mimeType: 'image/jpeg' } },
@@ -2397,7 +2397,7 @@ function App() {
         // Analisi AI
         const ai = new GoogleGenAI({ apiKey: GEMINI_KEY });
         const res = await ai.models.generateContent({
-          model: 'gemini-2.0-flash-exp',
+          model: 'gemini-1.5-flash',
           contents: {
             parts: [
               { inlineData: { data: photo.split(',')[1], mimeType: 'image/jpeg' } },
@@ -2500,7 +2500,7 @@ function App() {
     try {
       const ai = new GoogleGenAI({ apiKey: GEMINI_KEY });
       const res = await ai.models.generateContent({
-        model: 'gemini-3-flash-preview',
+        model: 'gemini-1.5-flash',
         contents: {
           parts: [
             { inlineData: { data: capturedImg.split(',')[1], mimeType: 'image/jpeg' } },
@@ -2621,7 +2621,7 @@ Lingua: ITALIANO. Sii SPECIFICO per questa pianta e il suo stato attuale.` }
       const context = lastAnalysis ? `L'utente ha analizzato un ${lastAnalysis.name}. Rispondi in base a questa pianta se pertinente, fornendo diagnosi o cure se richiesto.` : "";
       const ai = new GoogleGenAI({ apiKey: GEMINI_KEY });
       const res = await ai.models.generateContent({
-        model: 'gemini-3-flash-preview',
+        model: 'gemini-1.5-flash',
         contents: context + input,
         config: { systemInstruction: "Sei BioExpert AI. Rispondi in Italiano con tono amichevole ma esperto. IMPORTANTE: Usa liste puntate (- punto) per elenchi. Usa il **grassetto** per concetti chiave. Sii ordinato e pulito. Se la pianta è malata, dividi la risposta in sezioni chiare." }
       });
@@ -4775,7 +4775,6 @@ Lingua: ITALIANO. Sii SPECIFICO per questa pianta e il suo stato attuale.` }
               {fullScreenAnalysis.source === 'garden' && (
                 <div style={{ display: 'flex', background: 'var(--primary-light)', padding: 4, borderRadius: 16, marginBottom: 20 }}>
                   <button onClick={() => setDetailTab('info')} style={{ flex: 1, padding: '10px', borderRadius: 12, border: 'none', background: detailTab === 'info' ? 'var(--primary)' : 'transparent', color: detailTab === 'info' ? 'white' : 'var(--primary)', fontWeight: 700, cursor: 'pointer', fontSize: '0.75rem' }}>INFO</button>
-                  <button onClick={() => setDetailTab('care')} style={{ flex: 1, padding: '10px', borderRadius: 12, border: 'none', background: detailTab === 'care' ? 'var(--primary)' : 'transparent', color: detailTab === 'care' ? 'white' : 'var(--primary)', fontWeight: 700, cursor: 'pointer', fontSize: '0.75rem' }}>CURA</button>
                   <button onClick={() => setDetailTab('history')} style={{ flex: 1, padding: '10px', borderRadius: 12, border: 'none', background: detailTab === 'history' ? 'var(--primary)' : 'transparent', color: detailTab === 'history' ? 'white' : 'var(--primary)', fontWeight: 700, cursor: 'pointer', fontSize: '0.75rem' }}>ALBUM</button>
                 </div>
               )}
@@ -4817,7 +4816,7 @@ Lingua: ITALIANO. Sii SPECIFICO per questa pianta e il suo stato attuale.` }
                     </div>
                   </div>
                 </>
-              ) : detailTab === 'care' ? (
+              ) : false ? (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
 
                   {/* Sistema di Cura Progressivo */}
@@ -5175,11 +5174,7 @@ Lingua: ITALIANO. Sii SPECIFICO per questa pianta e il suo stato attuale.` }
               {fullScreenAnalysis.source === 'garden' ? (
                 <>
                   <div style={{ marginTop: 24, display: 'grid', gridTemplateColumns: detailTab === 'info' ? '1fr 1fr' : '1fr', gap: 10 }}>
-                    {detailTab === 'info' && (
-                      <button className="btn-game-action" style={{ background: 'var(--primary-dark)', color: 'white', padding: 16, borderRadius: 16, border: 'none', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }} onClick={() => setDetailTab('care')}>
-                        <Calendar size={18} /> GESTISCI CURA
-                      </button>
-                    )}
+
                     <button className="btn-game-action" style={{ background: '#e0f7fa', color: '#006064', padding: 16, borderRadius: 16, border: 'none', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }} onClick={async () => {
                       if (!username || !fullScreenAnalysis?.id) return;
                       const nextDate = new Date();
